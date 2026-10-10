@@ -1,6 +1,7 @@
 """OpenCode host: plugin triggers are a dialect, not a branch."""
 
 import json
+import pathlib
 import stat
 
 import pytest
@@ -54,6 +55,63 @@ def test_install_registers_plugin_entry_and_preserves_existing(tmp_path):
     assert str(store_root.resolve()) in rendered
 
 
+def test_capture_period_defaults_to_ten_minutes_and_roundtrips(tmp_path):
+    from agent_memory.core.config import Config
+
+    assert Config.default().write.capture_period_seconds == 600.0
+    config = Config.default()
+    config.write.capture_period_seconds = 60.0
+    config.save(tmp_path)
+
+    assert Config.load(tmp_path).write.capture_period_seconds == 60.0
+
+
+def test_install_projects_capture_period_into_plugin_options(tmp_path):
+    from agent_memory.core.config import Config
+
+    store = Store(tmp_path / "store")
+    store.init()
+    config = Config.load(store.root)
+    config.write.capture_period_seconds = 60.0
+    config.save(store.root)
+
+    target = setup.install("opencode", tmp_path / "opencode.json", store.root)
+
+    parsed = json.loads(target.read_text(encoding="utf-8"))
+    managed = [entry for entry in parsed["plugins"] if setup._is_managed(entry)]
+    assert managed[0]["options"]["periodMs"] == 60000
+
+
+def test_install_replaces_only_its_own_entry(tmp_path):
+    settings = tmp_path / "opencode.json"
+    settings.write_text(
+        json.dumps({"plugins": ["mem-hook-mentioning-impostor", "other-plugin"]}),
+        encoding="utf-8",
+    )
+
+    target = setup.install("opencode", settings, tmp_path / "store")
+
+    parsed = json.loads(target.read_text(encoding="utf-8"))
+    assert "mem-hook-mentioning-impostor" in parsed["plugins"]
+    assert "other-plugin" in parsed["plugins"]
+    managed = [entry for entry in parsed["plugins"] if setup._is_managed(entry)]
+    assert len(managed) == 1
+    assert managed[0]["options"]["distillTitle"] == "agent-memory-distill"
+
+
+def test_install_without_plugin_directory_fails_closed(tmp_path, monkeypatch):
+    settings = tmp_path / "opencode.json"
+    real_is_dir = pathlib.Path.is_dir
+    monkeypatch.setattr(
+        pathlib.Path,
+        "is_dir",
+        lambda self: False if self.name == "opencode" else real_is_dir(self),
+    )
+
+    with pytest.raises(ValidationError, match="plugin"):
+        setup.install("opencode", settings, tmp_path / "store")
+
+
 def test_install_without_store_root_fails_naming_the_store(tmp_path):
     settings = tmp_path / "opencode.json"
     with pytest.raises(ValidationError, match="store"):
@@ -98,6 +156,22 @@ def test_doctor_ready_with_binary_settings_and_plugin(tmp_path, monkeypatch):
 
 def _espec():
     return hosts.HostSpec(name="opencode", binary="opencode", model="m")
+
+
+def test_opencode_empty_answer_fails_like_codex_and_muse(tmp_path, monkeypatch):
+    import subprocess
+
+    from agent_memory.executor.hosts import Host
+
+    spec = hosts.HostSpec(
+        name="opencode", binary="opencode", model="m", attempts=1, retry_backoff_seconds=0
+    )
+    completed = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: completed)
+
+    result = Host(spec).run("hi", store_root=None)
+
+    assert not result.ok
 
 
 def test_opencode_routes_through_headless_run_with_json_output(tmp_path):

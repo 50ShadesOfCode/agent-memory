@@ -76,6 +76,14 @@ function messages(): unknown[] {
   return [{ messageID: "m1", role: "user", parts: [{ type: "text", text: "hi" }] }];
 }
 
+async function waitFor(fn: () => unknown, timeoutMs = 5000): Promise<void> {
+  const start = Date.now();
+  while (fn() === undefined) {
+    if (Date.now() - start > timeoutMs) throw new Error("timed out waiting for condition");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 test("failing hook still admits the prompt and advances no pointer", async () => {
   const dir = store();
   const s = stub(
@@ -85,6 +93,7 @@ test("failing hook still admits the prompt and advances no pointer", async () =>
   const done = await start(s);
   try {
     await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(s.storage.get("pointer:s1"), undefined);
   } finally {
     done();
@@ -97,7 +106,42 @@ test("working hook advances the pointer", async () => {
   const done = await start(s);
   try {
     await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    await waitFor(() => s.storage.get("pointer:s1"));
     assert.equal(s.storage.get("pointer:s1"), "m1");
+  } finally {
+    done();
+  }
+});
+
+test("polled triggers respect the throttle", async () => {
+  const dir = store();
+  const seen: unknown[] = messages();
+  const s = stub({ hook: "true", store: dir }, seen);
+  const done = await start(s);
+  try {
+    await s.handlers["tool:execute.after"]({ sessionID: "s1" });
+    await waitFor(() => s.storage.get("pointer:s1"));
+    seen.push({ messageID: "m2", role: "user", parts: [{ type: "text", text: "more" }] });
+    await s.handlers["tool:execute.after"]({ sessionID: "s1" });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(s.storage.get("pointer:s1"), "m1");
+  } finally {
+    done();
+  }
+});
+test("a no-op capture never suppresses the next productive one", async () => {
+  const dir = store();
+  const seen: unknown[] = messages();
+  const s = stub({ hook: "true", store: dir }, seen);
+  const done = await start(s);
+  try {
+    await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    await waitFor(() => s.storage.get("pointer:s1"));
+    await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    seen.push({ messageID: "m2", role: "user", parts: [{ type: "text", text: "more" }] });
+    await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    await waitFor(() => (s.storage.get("pointer:s1") === "m2" ? true : undefined));
+    assert.equal(s.storage.get("pointer:s1"), "m2");
   } finally {
     done();
   }
@@ -125,6 +169,24 @@ test("distill-titled sessions are skipped", async () => {
   const done = await start(s);
   try {
     await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(s.storage.get("pointer:s1"), undefined);
+  } finally {
+    done();
+  }
+});
+
+test("a custom distill title is honored", async () => {
+  const dir = store();
+  const s = stub(
+    { hook: "true", store: dir, throttleMs: 0, distillTitle: "custom-mark" },
+    messages(),
+  );
+  s.ctx.session.get = async () => ({ id: "s1", title: "custom-mark" });
+  const done = await start(s);
+  try {
+    await s.handlers["prompt"]({ sessionID: "s1", prompt: { text: "hi", files: [] } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(s.storage.get("pointer:s1"), undefined);
   } finally {
     done();

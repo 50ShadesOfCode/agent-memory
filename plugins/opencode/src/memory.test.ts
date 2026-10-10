@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildHookEvent, firstToken, toHistoryItems, unseenItems, type HistoryItem } from "./memory.ts";
+import { buildHookEvent, firstShellWord, toHistoryItems, unseenItems, type HistoryItem } from "./memory.ts";
 
 const history: HistoryItem[] = [
   { id: "m1", text: "user: hello" },
@@ -56,6 +56,6 @@ test("history extraction reads text parts and skips the silent", () => {
 });
 
 test("first shell word respects quotes", () => {
-  assert.equal(firstToken("/bin/mem-hook --host opencode"), "/bin/mem-hook");
-  assert.equal(firstToken("'/sp ace/mem-hook' --host opencode"), "/sp ace/mem-hook");
+  assert.equal(firstShellWord("/bin/mem-hook --host opencode"), "/bin/mem-hook");
+  assert.equal(firstShellWord("'/sp ace/mem-hook' --host opencode"), "/sp ace/mem-hook");
 });

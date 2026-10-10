@@ -17,6 +17,7 @@ from .errors import FieldError, NotFoundError, ValidationError
 from .paths import ARCHIVE_DIRNAME, SESSIONS_DIRNAME, StoreLayout
 
 SESSION_SUFFIX = ".jsonl"
+DISTILL_SESSION_TITLE = "agent-memory-distill"
 ASCII_SPACE = 32
 ASCII_DELETE = 127
 POINTER_SEPARATOR = "#"

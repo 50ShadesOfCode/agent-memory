@@ -23,6 +23,7 @@ import time
 
 from agent_memory.core import observation
 from agent_memory.core.config import MUSE_SETTINGS_ENV_VAR
+from agent_memory.core.sessions import DISTILL_SESSION_TITLE
 
 from .credentials import VertexCredentials
 
@@ -93,6 +94,7 @@ class Dialect:
     """How one host is spoken to. Every method is pure, so the shape is testable offline."""
 
     prompt_on_stdin = True
+    empty_label: str | None = None
 
     def command(
         self,
@@ -168,6 +170,8 @@ class ClaudeCodeDialect(Dialect):
 class CodexDialect(Dialect):
     """No system-prompt flag, so it rides in the prompt; and stdout carries the whole session
     transcript, so the final message is read from the file the host writes it to."""
+
+    empty_label = "Codex"
 
     def command(
         self,
@@ -253,6 +257,8 @@ class HermesDialect(Dialect):
 
 class MuseCodeDialect(Dialect):
     """Muse's headless transport: JSONL out, prompt file in, sandbox kept on."""
+
+    empty_label = "Muse"
 
     def command(
         self,
@@ -359,9 +365,9 @@ class OpencodeDialect(Dialect):
     fresh session, so no conversational memory rides along. OpenCode ships no native
     memory layer to switch off — the headless shape is the isolation.
 
-    Distill sessions carry DISTILL_TITLE so the capture plugin stands down for them."""
+    Distill sessions carry DISTILL_SESSION_TITLE so the capture plugin stands down for them."""
 
-    DISTILL_TITLE = "agent-memory-distill"
+    empty_label = "OpenCode"
 
     def command(
         self,
@@ -375,7 +381,7 @@ class OpencodeDialect(Dialect):
         tool_pattern=MEM_TOOL_PATTERN,
         workdir=None,
     ):
-        command = [spec.binary, "run", "--format", "json", "--title", self.DISTILL_TITLE]
+        command = [spec.binary, "run", "--format", "json", "--title", DISTILL_SESSION_TITLE]
         if spec.model:
             command += ["--model", spec.model]
         return command
@@ -610,9 +616,10 @@ class Host:
             detail = (completed.stderr.strip() or completed.stdout.strip())[:ERROR_EXCERPT]
             return HostResult("", False, elapsed, detail or "non-zero exit with no output")
         text = self.dialect.answer(completed.stdout, answer_file)
-        if self.spec.name in (HOST_CODEX, HOST_MUSE_CODE) and not text:
-            label = "Codex" if self.spec.name == HOST_CODEX else "Muse"
-            return HostResult("", False, elapsed, f"missing or empty {label} final message")
+        if self.dialect.empty_label is not None and not text:
+            return HostResult(
+                "", False, elapsed, f"missing or empty {self.dialect.empty_label} final message"
+            )
         return HostResult(text, True, elapsed)
 
     def _environment(

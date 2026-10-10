@@ -6,14 +6,18 @@ import io
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 
+import pytest
 from agent_memory.adapters import hook_entry
 from agent_memory.core.recall import Recall
 from agent_memory.core.store import Store
 
 PLUGIN_DIR = pathlib.Path(__file__).resolve().parents[2] / "plugins" / "opencode"
+LIVE = os.environ.get("MEM_LIVE_OPENCODE") == "1" and shutil.which("opencode") is not None
+needs_live = pytest.mark.skipif(not LIVE, reason="needs live opencode reasoner")
 
 
 def _mem(*args, store, input=None):
@@ -110,3 +114,38 @@ def test_hook_entry_never_fails_loudly(tmp_path, monkeypatch, capsys):
     assert code == hook_entry.EXIT_OK
     assert capsys.readouterr().out == ""
     assert (tmp_path / "store" / ".state" / hook_entry.LOG_FILENAME).is_file()
+
+
+@needs_live
+def test_live_distill_produces_recallable_memory(tmp_path):
+    store = tmp_path / "store"
+    assert _mem("mem", "init", store=store).returncode == 0
+    event = {
+        "session_id": "live-1",
+        "event": "tool",
+        "items": ["user: the zephyr-quux-736 valve sticks when cold"],
+    }
+    piped = _mem("mem-hook", "--host", "opencode", store=store, input=json.dumps(event))
+    assert piped.returncode == 0
+    env = {**os.environ, "AGENT_MEMORY_STORE": str(store)}
+    completed = subprocess.run(
+        ["uv", "run", "mem", "distill", "--force", "--reason", "host", "--reason-host", "opencode"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=600,
+        env=env,
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+
+    assert Recall(Store(store)).recall("zephyr-quux-736")
+
+
+@needs_live
+def test_live_setup_ends_ready(tmp_path):
+    from agent_memory.adapters import host_setup
+
+    store = Store(tmp_path / "store")
+    payload = host_setup.run(store, "opencode", settings_path=tmp_path / "opencode.json", live=True)
+
+    assert payload["status"] == "READY"

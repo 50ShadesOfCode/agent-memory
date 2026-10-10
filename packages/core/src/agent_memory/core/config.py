@@ -124,6 +124,7 @@ class WriteConfig:
     pending_token_threshold: int = 4000
     chars_per_token: int = 4
     idle_seconds: float = 900.0
+    capture_period_seconds: float = 600.0
     distill_on_boundary: bool = True
     slot_table: bool = True
     event_lane: bool = True

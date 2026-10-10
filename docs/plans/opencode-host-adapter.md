@@ -71,9 +71,32 @@ loses it.
 
 ## Non-goals
 
-- Exact end-of-turn / end-of-session triggers (the host does not emit them).
+- A true app-close trigger (close is covered by startup backfill, not by an
+  event; `session.idle` closes the turn).
 - New recall ranking, new memory tools, or core write-path changes.
 - Vector index (stays optional, unchanged).
+
+## Verification performed
+
+- Plugin surface checked against the installed `@opencode/plugin` 2.0.26
+  type tables: `prompt.files` file attachments, `execute.after` session
+  identity, `compaction` hook, `command.transform`, and the server event
+  stream carrying `session.created`, `session.idle`,
+  `session.execution.succeeded/failed`, and `session.deleted` with
+  `data.sessionID`.
+- Headless `opencode run` probed live: reads the prompt from stdin, emits
+  JSONL text parts, starts a fresh session per call.
+- `mem setup --host opencode` in a probe project ends READY with all
+  eight doctor checks green, including a live reasoner round trip.
+- Kill drill (`tests/system/test_opencode_plugin.py`): re-piped payloads
+  archive once across process lifetimes; opencode-written records recall
+  through plain core `Recall`.
+- Live distill to a recallable memory and live setup to READY are covered
+  by gated system tests (`MEM_LIVE_OPENCODE=1`, skipped otherwise); green
+  on 2026-10-11.
+- Russian recall restored by the `fix/ru-tokenizer` change this work builds
+  on: Cyrillic queries retrieve Cyrillic records, verified live and by
+  `tests/unit/test_ru_recall.py`.
 
 ## Acceptance
 

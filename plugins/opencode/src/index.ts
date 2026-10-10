@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Plugin } from "@opencode/plugin";
-import { buildHookEvent, firstToken, toHistoryItems, unseenItems } from "./memory.ts";
+import { buildHookEvent, firstShellWord, toHistoryItems, unseenItems } from "./memory.ts";
 
 const EXECUTOR_ENV = "AGENT_MEMORY_EXECUTOR";
 const DEFAULT_PERIOD_MS = 600_000;
@@ -14,6 +14,14 @@ interface Options {
   store?: string;
   periodMs?: number;
   throttleMs?: number;
+  distillTitle?: string;
+}
+
+interface RunConfig {
+  hook: string;
+  store: string;
+  throttleMs: number;
+  distillTitle: string;
 }
 
 interface Context {
@@ -41,7 +49,7 @@ interface Context {
 const lastRun = new Map<string, number>();
 
 function hookBinary(hook: string): string {
-  return join(dirname(firstToken(hook)), "mem");
+  return join(dirname(firstShellWord(hook)), "mem");
 }
 
 function storeLog(store: string, message: string): void {
@@ -49,11 +57,10 @@ function storeLog(store: string, message: string): void {
     mkdirSync(join(store, ".state"), { recursive: true });
     appendFileSync(join(store, ".state", "hooks.log"), `${message}\n`);
   } catch {
-    /* logging must never break the host */
   }
 }
 
-function pipeHook(hook: string, payload: unknown): boolean {
+function forwardToHook(hook: string, payload: unknown): boolean {
   const result = spawnSync("/bin/sh", ["-c", hook], {
     input: JSON.stringify(payload),
     timeout: 60_000,
@@ -67,7 +74,7 @@ async function pointerOf(ctx: Context, sessionID: string): Promise<string | null
   return typeof pointer === "string" ? pointer : null;
 }
 
-async function remember(ctx: Context, sessionID: string): Promise<void> {
+async function trackSession(ctx: Context, sessionID: string): Promise<void> {
   const known = await ctx.storage.get("sessions");
   const sessions: string[] = Array.isArray(known) ? known.filter((id) => typeof id === "string") : [];
   if (!sessions.includes(sessionID)) {
@@ -87,13 +94,17 @@ async function forget(ctx: Context, sessionID: string): Promise<void> {
   }
 }
 
-const DISTILL_TITLE = "agent-memory-distill";
+const DISTILL_TITLE_FALLBACK = "agent-memory-distill";
 
-async function executorOwned(ctx: Context, sessionID: string): Promise<boolean> {
+async function executorOwned(
+  ctx: Context,
+  sessionID: string,
+  distillTitle: string,
+): Promise<boolean> {
   if (process.env[EXECUTOR_ENV]) return true;
   try {
     const info = (await ctx.session.get({ sessionID })) as { title?: unknown } | null;
-    return typeof info?.title === "string" && info.title === DISTILL_TITLE;
+    return typeof info?.title === "string" && info.title === distillTitle;
   } catch {
     return false;
   }
@@ -101,25 +112,27 @@ async function executorOwned(ctx: Context, sessionID: string): Promise<boolean> 
 
 async function capture(
   ctx: Context,
-  opts: Required<Pick<Options, "hook" | "store">> & { throttleMs: number },
+  cfg: RunConfig,
   sessionID: string,
   trigger: string,
+  urgent = false,
 ): Promise<void> {
   try {
-    const now = Date.now();
-    if (now - (lastRun.get(sessionID) ?? 0) < opts.throttleMs) return;
-    lastRun.set(sessionID, now);
-    if (await executorOwned(ctx, sessionID)) return;
+    if (await executorOwned(ctx, sessionID, cfg.distillTitle)) return;
     const messages = await ctx.session.context({ sessionID });
     const history = toHistoryItems(Array.isArray(messages) ? messages : []);
     const { items, pointer } = unseenItems(history, await pointerOf(ctx, sessionID));
     if (items.length === 0 || pointer === null) return;
-    // Full history, not the delta: the watermark slices what it already saw.
-    if (!pipeHook(opts.hook, buildHookEvent(sessionID, trigger, history))) return;
+    if (!urgent) {
+      const now = Date.now();
+      if (now - (lastRun.get(sessionID) ?? 0) < cfg.throttleMs) return;
+      lastRun.set(sessionID, now);
+    }
+    if (!forwardToHook(cfg.hook, buildHookEvent(sessionID, trigger, history))) return;
     await ctx.storage.set(`pointer:${sessionID}`, pointer);
-    await remember(ctx, sessionID);
+    await trackSession(ctx, sessionID);
   } catch (error) {
-    storeLog(opts.store, `capture failed: ${String(error)}`);
+    storeLog(cfg.store, `capture failed: ${String(error)}`);
   }
 }
 
@@ -134,21 +147,21 @@ function inject(event: any, store: string): void {
   }
 }
 
-function launchDistill(opts: Required<Pick<Options, "hook" | "store">>, sessionID: string): void {
+function launchDistill(cfg: RunConfig, sessionID: string): void {
   try {
     const child = spawn(
-      hookBinary(opts.hook),
+      hookBinary(cfg.hook),
       ["distill", "--session", sessionID, "--reason", "host", "--reason-host", "opencode"],
       {
         detached: true,
         stdio: "ignore",
-        env: { ...process.env, AGENT_MEMORY_STORE: opts.store, [EXECUTOR_ENV]: "1" },
+        env: { ...process.env, AGENT_MEMORY_STORE: cfg.store, [EXECUTOR_ENV]: "1" },
       },
     );
-    child.on("error", (error) => storeLog(opts.store, `distill launch failed: ${String(error)}`));
+    child.on("error", (error) => storeLog(cfg.store, `distill launch failed: ${String(error)}`));
     child.unref();
   } catch (error) {
-    storeLog(opts.store, `distill launch failed: ${String(error)}`);
+    storeLog(cfg.store, `distill launch failed: ${String(error)}`);
   }
 }
 
@@ -159,23 +172,28 @@ export default Plugin.define({
     const outer = ctx as Context;
     const opts = (outer.options ?? {}) as Options;
     if (!opts.hook || !opts.store) return;
-    const run = { hook: opts.hook, store: opts.store, throttleMs: opts.throttleMs ?? THROTTLE_MS };
+    const cfg: RunConfig = {
+      hook: opts.hook,
+      store: opts.store,
+      throttleMs: opts.throttleMs ?? THROTTLE_MS,
+      distillTitle: opts.distillTitle ?? DISTILL_TITLE_FALLBACK,
+    };
 
     const known = await outer.storage.get("sessions").catch(() => []);
     const sessions: string[] = Array.isArray(known) ? known.filter((id) => typeof id === "string") : [];
     for (const sessionID of sessions) {
-      await capture(outer, run, sessionID, "backfill");
+      await capture(outer, cfg, sessionID, "backfill", true);
     }
 
     await outer.session.hook("prompt", async (event: any) => {
-      if (typeof event?.sessionID === "string") await capture(outer, run, event.sessionID, "prompt");
-      inject(event, run.store);
+      inject(event, cfg.store);
+      if (typeof event?.sessionID === "string") void capture(outer, cfg, event.sessionID, "prompt", true);
     });
     await outer.tool.hook("execute.after", async (event: any) => {
-      if (typeof event?.sessionID === "string") await capture(outer, run, event.sessionID, "tool");
+      if (typeof event?.sessionID === "string") await capture(outer, cfg, event.sessionID, "tool");
     });
     await outer.session.hook("compaction", async (event: any) => {
-      if (typeof event?.sessionID === "string") await capture(outer, run, event.sessionID, "compaction");
+      if (typeof event?.sessionID === "string") await capture(outer, cfg, event.sessionID, "compaction");
     });
     await outer.command.transform((editor: any) => {
       editor.add({
@@ -183,8 +201,8 @@ export default Plugin.define({
         description: "Distill archived conversation into memories",
         execute: async ({ sessionID }: any) => {
           if (typeof sessionID === "string") {
-            await capture(outer, run, sessionID, "command");
-            launchDistill(run, sessionID);
+            await capture(outer, cfg, sessionID, "command", true);
+            launchDistill(cfg, sessionID);
           }
         },
       });
@@ -195,7 +213,7 @@ export default Plugin.define({
         const current = await outer.storage.get("sessions").catch(() => []);
         const ids: string[] = Array.isArray(current) ? current.filter((id) => typeof id === "string") : [];
         for (const sessionID of ids) {
-          await capture(outer, run, sessionID, "timer");
+          await capture(outer, cfg, sessionID, "timer");
         }
       })();
     }, opts.periodMs ?? DEFAULT_PERIOD_MS);
@@ -208,19 +226,18 @@ export default Plugin.define({
           const sessionID = (data as { sessionID?: unknown } | null)?.sessionID;
           if (typeof sessionID !== "string") continue;
           if (type === "session.created") {
-            await remember(outer, sessionID);
+            await trackSession(outer, sessionID);
           } else if (
             type === "session.idle" ||
             type === "session.execution.succeeded" ||
             type === "session.execution.failed"
           ) {
-            await capture(outer, run, sessionID, "idle");
+            await capture(outer, cfg, sessionID, "idle");
           } else if (type === "session.deleted") {
             await forget(outer, sessionID);
           }
         }
       } catch {
-        /* the stream ends with unload */
       }
     })();
     return () => {

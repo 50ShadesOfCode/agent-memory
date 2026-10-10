@@ -12,7 +12,9 @@ import sys
 import tempfile
 
 from agent_memory.core import prompts
+from agent_memory.core.config import Config
 from agent_memory.core.errors import FieldError, ValidationError
+from agent_memory.core.sessions import DISTILL_SESSION_TITLE
 
 from . import moments
 
@@ -169,11 +171,27 @@ def install(
 
 
 def plugin_source() -> str:
-    """Absolute plugin directory in a checkout, published package name otherwise."""
-    checkout = pathlib.Path(__file__).resolve().parents[4] / "plugins" / "opencode"
+    """Absolute plugin directory in a checkout; fail closed anywhere else."""
+    checkout = pathlib.Path(__file__).resolve().parents[5] / "plugins" / "opencode"
     if checkout.is_dir():
         return str(checkout)
-    return "agent-memory-opencode"
+    raise ValidationError(
+        [
+            FieldError(
+                "plugin",
+                "agent-memory plugin directory is missing from this install; "
+                "set up from a checkout",
+            )
+        ]
+    )
+
+
+def _is_managed(entry: object) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    options = entry.get("options", {})
+    hook = options.get("hook", "") if isinstance(options, dict) else ""
+    return HOOK_COMMAND in str(hook)
 
 
 def _install_opencode(
@@ -188,17 +206,22 @@ def _install_opencode(
             [FieldError("store", "opencode setup requires an explicit Store; pass --store")]
         )
     resolved = str(pathlib.Path(store_root).resolve())
+    period_ms = int(
+        Config.load(pathlib.Path(store_root)).write.capture_period_seconds * 1000
+    )
     entry = {
         "package": plugin_source(),
         "options": {
             "hook": hook_command(moments.HOST_OPENCODE, store_root),
             "store": resolved,
+            "distillTitle": DISTILL_SESSION_TITLE,
+            "periodMs": period_ms,
         },
     }
     plugins = settings.setdefault("plugins", [])
     if not isinstance(plugins, list):
         raise ValidationError([FieldError("settings.plugins", "must be an array")])
-    kept = [existing for existing in plugins if HOOK_COMMAND not in json.dumps(existing)]
+    kept = [existing for existing in plugins if not _is_managed(existing)]
     settings["plugins"] = [*kept, entry]
     if mcp:
         _merge_opencode_mcp(settings, store_root)

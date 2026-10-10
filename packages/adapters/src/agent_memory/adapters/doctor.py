@@ -207,7 +207,7 @@ def _plugin_checks(configured: dict[str, object], store_root: pathlib.Path) -> l
     if not isinstance(plugins, list):
         return [Check("HOOK_INVALID", False, "settings.plugins is missing or not an array")]
     expected_store = str(store_root.resolve())
-    managed = [entry for entry in plugins if setup.HOOK_COMMAND in json.dumps(entry)]
+    managed = [entry for entry in plugins if setup._is_managed(entry)]
     failures = []
     if len(managed) != 1:
         failures.append(f"found {len(managed)} managed plugin entries")

@@ -29,7 +29,7 @@ function pointerOf(history: HistoryItem[]): string | null {
 }
 
 /** First shell word, honoring single and double quotes. */
-export function firstToken(command: string): string {
+export function firstShellWord(command: string): string {
   let word = "";
   let quote = "";
   for (const char of command.trim()) {
