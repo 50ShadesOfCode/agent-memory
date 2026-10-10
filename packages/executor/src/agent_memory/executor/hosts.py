@@ -357,7 +357,11 @@ class MuseCodeDialect(Dialect):
 class OpencodeDialect(Dialect):
     """Headless `run` reads the prompt from stdin and emits JSONL; every run starts a
     fresh session, so no conversational memory rides along. OpenCode ships no native
-    memory layer to switch off — the headless shape is the isolation."""
+    memory layer to switch off — the headless shape is the isolation.
+
+    Distill sessions carry DISTILL_TITLE so the capture plugin stands down for them."""
+
+    DISTILL_TITLE = "agent-memory-distill"
 
     def command(
         self,
@@ -371,7 +375,7 @@ class OpencodeDialect(Dialect):
         tool_pattern=MEM_TOOL_PATTERN,
         workdir=None,
     ):
-        command = [spec.binary, "run", "--format", "json"]
+        command = [spec.binary, "run", "--format", "json", "--title", self.DISTILL_TITLE]
         if spec.model:
             command += ["--model", spec.model]
         return command

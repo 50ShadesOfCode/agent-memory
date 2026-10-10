@@ -112,6 +112,7 @@ def test_opencode_routes_through_headless_run_with_json_output(tmp_path):
 
     assert command[:2] == ["opencode", "run"]
     assert "--format" in command and "json" in command
+    assert "--title" in command and "agent-memory-distill" in command
 
 
 def test_opencode_answer_keeps_only_the_last_message(tmp_path):

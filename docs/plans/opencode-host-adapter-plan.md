@@ -17,7 +17,12 @@
 - Hooks never break the host: every hook path catches failures into the store log and yields control (exit 0 semantics, per `hook_entry.py`).
 - Single write path: plugin capture appends to the archive only; memories are written by `mem distill` through validate → hash-diff → reindex.
 - Capture is idempotent per session pointer; the distill watermark advances only on success, backlog stays eligible for retry.
-- Capture period is a store config knob, not a hardcoded value.
+- Capture period and throttle live in plugin options (installed default 10 min /
+  5 s, overridable per entry). A store-config knob was considered and deferred:
+  the store config schema refuses unknown knobs, so wiring it means a schema
+  change with its own migration — disproportionate for this adapter.
+- Distill sessions are titled `agent-memory-distill` by the executor dialect;
+  the plugin stands down for that title (plus its own marked process env).
 - Nothing lands on `main` except via feature branch + PR; work happens in this branch's worktree.
 
 ## Review Focus

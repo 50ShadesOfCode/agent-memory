@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Plugin } from "@opencode/plugin";
@@ -13,12 +13,14 @@ interface Options {
   hook?: string;
   store?: string;
   periodMs?: number;
+  throttleMs?: number;
 }
 
 interface Context {
   options?: unknown;
   session: {
     context(input: { sessionID: string }): Promise<unknown>;
+    get(input: { sessionID: string }): Promise<unknown>;
     hook(name: string, callback: (event: any) => void | Promise<void>): Promise<unknown>;
   };
   tool: {
@@ -41,18 +43,20 @@ function hookBinary(hook: string): string {
 
 function storeLog(store: string, message: string): void {
   try {
+    mkdirSync(join(store, ".state"), { recursive: true });
     appendFileSync(join(store, ".state", "hooks.log"), `${message}\n`);
   } catch {
     /* logging must never break the host */
   }
 }
 
-function pipeHook(hook: string, payload: unknown): void {
-  spawnSync("/bin/sh", ["-c", hook], {
+function pipeHook(hook: string, payload: unknown): boolean {
+  const result = spawnSync("/bin/sh", ["-c", hook], {
     input: JSON.stringify(payload),
     timeout: 60_000,
     stdio: ["pipe", "ignore", "ignore"],
   });
+  return !result.error && result.status === 0;
 }
 
 async function pointerOf(ctx: Context, sessionID: string): Promise<string | null> {
@@ -69,17 +73,35 @@ async function remember(ctx: Context, sessionID: string): Promise<void> {
   }
 }
 
-async function capture(ctx: Context, opts: Required<Pick<Options, "hook" | "store">>, sessionID: string, trigger: string): Promise<void> {
+const DISTILL_TITLE = "agent-memory-distill";
+
+async function executorOwned(ctx: Context, sessionID: string): Promise<boolean> {
+  if (process.env[EXECUTOR_ENV]) return true;
+  try {
+    const info = (await ctx.session.get({ sessionID })) as { title?: unknown } | null;
+    return typeof info?.title === "string" && info.title === DISTILL_TITLE;
+  } catch {
+    return false;
+  }
+}
+
+async function capture(
+  ctx: Context,
+  opts: Required<Pick<Options, "hook" | "store">> & { throttleMs: number },
+  sessionID: string,
+  trigger: string,
+): Promise<void> {
   try {
     const now = Date.now();
-    if (now - (lastRun.get(sessionID) ?? 0) < THROTTLE_MS) return;
+    if (now - (lastRun.get(sessionID) ?? 0) < opts.throttleMs) return;
     lastRun.set(sessionID, now);
+    if (await executorOwned(ctx, sessionID)) return;
     const messages = await ctx.session.context({ sessionID });
     const history = toHistoryItems(Array.isArray(messages) ? messages : []);
     const { items, pointer } = unseenItems(history, await pointerOf(ctx, sessionID));
     if (items.length === 0 || pointer === null) return;
     // Full history, not the delta: the watermark slices what it already saw.
-    pipeHook(opts.hook, buildHookEvent(sessionID, trigger, history));
+    if (!pipeHook(opts.hook, buildHookEvent(sessionID, trigger, history))) return;
     await ctx.storage.set(`pointer:${sessionID}`, pointer);
     await remember(ctx, sessionID);
   } catch (error) {
@@ -109,6 +131,7 @@ function launchDistill(opts: Required<Pick<Options, "hook" | "store">>, sessionI
         env: { ...process.env, AGENT_MEMORY_STORE: opts.store, [EXECUTOR_ENV]: "1" },
       },
     );
+    child.on("error", (error) => storeLog(opts.store, `distill launch failed: ${String(error)}`));
     child.unref();
   } catch (error) {
     storeLog(opts.store, `distill launch failed: ${String(error)}`);
@@ -118,10 +141,11 @@ function launchDistill(opts: Required<Pick<Options, "hook" | "store">>, sessionI
 export default Plugin.define({
   id: "agent-memory",
   async setup(ctx: unknown) {
+    if (process.env[EXECUTOR_ENV]) return;
     const outer = ctx as Context;
     const opts = (outer.options ?? {}) as Options;
     if (!opts.hook || !opts.store) return;
-    const run = { hook: opts.hook, store: opts.store };
+    const run = { hook: opts.hook, store: opts.store, throttleMs: opts.throttleMs ?? THROTTLE_MS };
 
     const known = await outer.storage.get("sessions").catch(() => []);
     const sessions: string[] = Array.isArray(known) ? known.filter((id) => typeof id === "string") : [];
