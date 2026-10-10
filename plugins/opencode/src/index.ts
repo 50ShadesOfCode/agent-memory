@@ -78,7 +78,8 @@ async function capture(ctx: Context, opts: Required<Pick<Options, "hook" | "stor
     const history = toHistoryItems(Array.isArray(messages) ? messages : []);
     const { items, pointer } = unseenItems(history, await pointerOf(ctx, sessionID));
     if (items.length === 0 || pointer === null) return;
-    pipeHook(opts.hook, buildHookEvent(sessionID, trigger, items));
+    // Full history, not the delta: the watermark slices what it already saw.
+    pipeHook(opts.hook, buildHookEvent(sessionID, trigger, history));
     await ctx.storage.set(`pointer:${sessionID}`, pointer);
     await remember(ctx, sessionID);
   } catch (error) {
