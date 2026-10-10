@@ -15,6 +15,10 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --all-packages
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix plugins/opencode
       - name: Lint
         run: uv run ruff check .
       - name: Types

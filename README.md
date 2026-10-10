@@ -393,7 +393,7 @@ uv run pytest -q && uv run ruff check . && uv run mypy
 The OpenCode plugin needs its own dependencies once per checkout:
 
 ```bash
-cd plugins/opencode && npm install
+cd plugins/opencode && npm ci
 ```
 
 The task lifecycle and the invariants a change must not break are in [CLAUDE.md](CLAUDE.md).
