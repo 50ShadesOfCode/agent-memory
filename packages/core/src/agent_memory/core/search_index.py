@@ -10,7 +10,7 @@ from .chunking import Chunk
 from .database import SURFACE_ACTIVE, SURFACE_HISTORY
 from .record import MemoryRecord
 
-_TOKENS = re.compile(r"[0-9A-Za-z_]+")
+_TOKENS = re.compile(r"[0-9A-Za-z_А-Яа-яЁё]+")
 LINK_SEPARATOR = ","
 SURFACES = (SURFACE_ACTIVE, SURFACE_HISTORY)
 
