@@ -17,3 +17,4 @@ Historical experiment scores remain attached to the reading policy and corpus un
 which they were measured.
 
 Raw provenance is append-only even when a clock and excerpt produce an existing filename. Concurrent or repeated evidence captures preserve earlier content and source attribution instead of rewriting it.
+Raw session ranges include blank messages. Appending them preserves contiguous indices and keeps subsequent provenance ranges bound to their original positions.
