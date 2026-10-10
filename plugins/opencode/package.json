@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "node --test src/",
+    "test": "node --test src/memory.test.ts src/index.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

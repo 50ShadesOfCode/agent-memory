@@ -92,7 +92,7 @@ def test_opencode_written_memory_recalled_by_plain_core(tmp_path):
 def test_plugin_node_suite_passes():
     assert PLUGIN_DIR.is_dir(), "plugins/opencode not implemented yet"
     completed = subprocess.run(
-        ["node", "--test", "src/"],
+        ["node", "--test", "src/memory.test.ts", "src/index.test.ts"],
         cwd=PLUGIN_DIR,
         capture_output=True,
         text=True,
