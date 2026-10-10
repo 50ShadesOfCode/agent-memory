@@ -373,6 +373,36 @@ shorthand even though the configured server handshake succeeds. Lifecycle hooks 
 injection do not depend on that optional model-driven MCP call. A missing Muse login is reported
 as `BLOCKED_BY_MUSE_AUTH`; echo or mocked providers do not count as live E2E evidence.
 
+### OpenCode
+
+Install [OpenCode](https://opencode.ai) and make sure `opencode` is on `PATH`.
+No provider keys are needed: distillation reasons through headless
+`opencode run` using the login OpenCode already has.
+
+```bash
+mem setup --host opencode
+mem setup --host opencode --settings /path/to/project/opencode.json --mcp
+```
+
+Without `--settings`, setup targets the global `~/.config/opencode/opencode.json`;
+point it at a project file to scope the memory plugin to one project. Setup
+installs the `agent-memory` plugin (prompt injection, conversation capture,
+`/mem-distill` command) and the canonical skill; `--mcp` adds the stdio MCP
+server as well. Re-running setup is safe and never duplicates the plugin
+entry. Check readiness later with:
+
+```bash
+mem doctor --host opencode
+```
+
+OpenCode emits no end-of-session event, so capture is layered instead of
+boundary-exact: finished turns (`session.idle`), tool results, prompt
+admissions, compaction, and a slow timer all archive into the same backlog,
+and distillation consumes it on `/mem-distill` or on schedule. Closing the
+app mid-turn loses nothing: the next start backfills the gap from OpenCode's
+own session history before anything new is captured. Recall works in Russian
+as well as English; Cyrillic queries retrieve Cyrillic records.
+
 ## Let it sleep
 
 ```bash
