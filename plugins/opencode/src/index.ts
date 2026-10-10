@@ -29,6 +29,9 @@ interface Context {
   command: {
     transform(callback: (editor: any) => void): Promise<unknown>;
   };
+  event: {
+    subscribe(options?: { signal?: AbortSignal }): AsyncIterable<unknown>;
+  };
   storage: {
     get(key: string): Promise<unknown>;
     set(key: string, value: unknown): Promise<void>;
@@ -70,6 +73,17 @@ async function remember(ctx: Context, sessionID: string): Promise<void> {
   if (!sessions.includes(sessionID)) {
     sessions.push(sessionID);
     await ctx.storage.set("sessions", sessions);
+  }
+}
+
+async function forget(ctx: Context, sessionID: string): Promise<void> {
+  const known = await ctx.storage.get("sessions");
+  const sessions: string[] = Array.isArray(known) ? known.filter((id) => typeof id === "string") : [];
+  if (sessions.includes(sessionID)) {
+    await ctx.storage.set(
+      "sessions",
+      sessions.filter((id) => id !== sessionID),
+    );
   }
 }
 
@@ -185,6 +199,33 @@ export default Plugin.define({
         }
       })();
     }, opts.periodMs ?? DEFAULT_PERIOD_MS);
-    return () => clearInterval(timer);
+    const events = new AbortController();
+    void (async () => {
+      try {
+        for await (const raw of outer.event.subscribe({ signal: events.signal })) {
+          const type = (raw as { type?: unknown } | null)?.type;
+          const data = (raw as { data?: unknown } | null)?.data;
+          const sessionID = (data as { sessionID?: unknown } | null)?.sessionID;
+          if (typeof sessionID !== "string") continue;
+          if (type === "session.created") {
+            await remember(outer, sessionID);
+          } else if (
+            type === "session.idle" ||
+            type === "session.execution.succeeded" ||
+            type === "session.execution.failed"
+          ) {
+            await capture(outer, run, sessionID, "idle");
+          } else if (type === "session.deleted") {
+            await forget(outer, sessionID);
+          }
+        }
+      } catch {
+        /* the stream ends with unload */
+      }
+    })();
+    return () => {
+      events.abort();
+      clearInterval(timer);
+    };
   },
 });

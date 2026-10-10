@@ -14,7 +14,11 @@ interface Stub {
   storage: Map<string, unknown>;
 }
 
-function stub(options: Record<string, unknown>, messages: unknown[] = []): Stub {
+function stub(
+  options: Record<string, unknown>,
+  messages: unknown[] = [],
+  scriptedEvents: unknown[] = [],
+): Stub {
   const handlers: Record<string, (event: any) => unknown> = {};
   const storage = new Map<string, unknown>();
   let commandDef: any = null;
@@ -25,6 +29,11 @@ function stub(options: Record<string, unknown>, messages: unknown[] = []): Stub 
       get: async () => ({ id: "s1", title: "work" }),
       hook: async (name: string, cb: (event: any) => unknown) => {
         handlers[name] = cb;
+      },
+    },
+    event: {
+      subscribe: async function* () {
+        yield* scriptedEvents;
       },
     },
     tool: {
@@ -149,6 +158,51 @@ test("distill launch failure is logged, never thrown", async () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     const log = readFileSync(join(dir, ".state", "hooks.log"), "utf-8");
     assert.match(log, /distill launch failed/);
+  } finally {
+    done();
+  }
+});
+
+test("session.created teaches the plugin new sessions", async () => {
+  const dir = store();
+  const s = stub({ hook: "true", store: dir, throttleMs: 0 }, [], [
+    { type: "session.created", data: { sessionID: "s9" } },
+  ]);
+  const done = await start(s);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const known = s.storage.get("sessions") as string[];
+    assert.ok(known.includes("s9"));
+  } finally {
+    done();
+  }
+});
+
+test("session.idle captures the finished turn", async () => {
+  const dir = store();
+  const s = stub({ hook: "true", store: dir, throttleMs: 0 }, messages(), [
+    { type: "session.idle", data: { sessionID: "s1" } },
+  ]);
+  const done = await start(s);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(s.storage.get("pointer:s1"), "m1");
+  } finally {
+    done();
+  }
+});
+
+test("session.deleted forgets the session", async () => {
+  const dir = store();
+  const s = stub({ hook: "true", store: dir, throttleMs: 0 }, [], [
+    { type: "session.created", data: { sessionID: "s9" } },
+    { type: "session.deleted", data: { sessionID: "s9" } },
+  ]);
+  const done = await start(s);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const known = s.storage.get("sessions") as string[];
+    assert.ok(!known.includes("s9"));
   } finally {
     done();
   }

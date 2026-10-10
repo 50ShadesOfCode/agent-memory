@@ -32,12 +32,17 @@ loses it.
 
 1. **OpenCode plugin (TypeScript).** Lives beside the Python packages and
    ships its own manifest. On setup it registers the prompt hook, the
-   compaction hook, the distill command, capture on tool completion, and a
-   capture timer as the last resort. Capture layers overlap: tool results
-   are archived as they land, admission of a new prompt flushes the
-   previous turn's remainder, the timer catches long tool-less stretches,
-   and startup backfill covers a close before any flush. On unload the
-   plugin disposes all registrations and timers. The plugin shells out to the
+   compaction hook, the distill command, capture on tool completion, the
+   server event stream, and a capture timer as the last resort. Capture
+   layers overlap: `session.idle` and execution outcome events close the
+   turn, tool results are archived as they land, admission of a new prompt
+   flushes the previous turn's remainder, `session.created` teaches the
+   plugin sessions born outside any prompt, the timer catches long
+   tool-less stretches, and startup backfill covers a close before any
+   flush. Residual gap, stated openly: a session the plugin never saw —
+   born, killed, and never reopened — waits for its first prompt to be
+   archived. On unload the plugin disposes all registrations, the event
+   stream, and timers. The plugin shells out to the
    installed `mem` / `mem-hook` binaries by absolute path and never embeds
    reasoning: no LLM client inside, same as the library core.
 2. **Python host dialect.** `moments` gains an `opencode` entry mapping the
