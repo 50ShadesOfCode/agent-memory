@@ -12,15 +12,18 @@ import sys
 import tempfile
 
 from agent_memory.core import prompts
+from agent_memory.core.config import Config
 from agent_memory.core.errors import FieldError, ValidationError
+from agent_memory.core.sessions import DISTILL_SESSION_TITLE
 
 from . import moments
 
-HOOK_COMMAND = "mem-hook"
-HOST_FLAG = "--host"
 CLAUDE_SETTINGS = pathlib.Path("~/.claude/settings.json")
 CODEX_SETTINGS = pathlib.Path("~/.codex/hooks.json")
 MUSE_SETTINGS = pathlib.Path("muse/settings.json")
+OPENCODE_SETTINGS = pathlib.Path("opencode/opencode.json")
+HOOK_COMMAND = "mem-hook"
+HOST_FLAG = "--host"
 HOOKS_KEY = "hooks"
 MATCHER_KEY = "matcher"
 ANY_MATCHER = "*"
@@ -31,6 +34,7 @@ SETTINGS_FOR = {
     moments.HOST_CLAUDE_CODE: CLAUDE_SETTINGS,
     moments.HOST_CODEX: CODEX_SETTINGS,
     moments.HOST_MUSE_CODE: MUSE_SETTINGS,
+    moments.HOST_OPENCODE: OPENCODE_SETTINGS,
 }
 ALIASES = {"muse": moments.HOST_MUSE_CODE}
 MUSE_SCHEMA_VERSION = 1
@@ -45,6 +49,7 @@ BINARIES = {
     moments.HOST_CLAUDE_CODE: "claude",
     moments.HOST_CODEX: "codex",
     moments.HOST_MUSE_CODE: "muse",
+    moments.HOST_OPENCODE: "opencode",
 }
 
 
@@ -64,11 +69,11 @@ def canonical_host(host: str) -> str:
 
 def default_settings_path(host: str, environment: dict[str, str] | None = None) -> pathlib.Path:
     canonical = canonical_host(host)
-    if canonical == moments.HOST_MUSE_CODE:
+    if canonical in (moments.HOST_MUSE_CODE, moments.HOST_OPENCODE):
         env = os.environ if environment is None else environment
         fallback = pathlib.Path(env.get("HOME", "~")).expanduser() / ".config"
         config_home = pathlib.Path(env.get("XDG_CONFIG_HOME") or fallback)
-        return config_home / MUSE_SETTINGS
+        return config_home / SETTINGS_FOR[canonical]
     return SETTINGS_FOR[canonical].expanduser()
 
 
@@ -114,6 +119,8 @@ def install(
     target = settings_path or default_settings_path(host)
     target.parent.mkdir(parents=True, exist_ok=True)
     settings = _read_settings(target)
+    if host == moments.HOST_OPENCODE:
+        return _install_opencode(target, settings, store_root, mcp=mcp)
     if host == moments.HOST_MUSE_CODE:
         settings.setdefault("schema_version", MUSE_SCHEMA_VERSION)
         if provider:
@@ -161,6 +168,93 @@ def install(
     if mcp and host != moments.HOST_MUSE_CODE:
         _install_external_mcp(host, target, store_root)
     return target
+
+
+def plugin_source() -> str:
+    """Absolute plugin directory in a checkout; fail closed anywhere else."""
+    checkout = pathlib.Path(__file__).resolve().parents[5] / "plugins" / "opencode"
+    if checkout.is_dir():
+        return str(checkout)
+    raise ValidationError(
+        [
+            FieldError(
+                "plugin",
+                "agent-memory plugin directory is missing from this install; "
+                "set up from a checkout",
+            )
+        ]
+    )
+
+
+def _is_managed(entry: object) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    options = entry.get("options", {})
+    hook = options.get("hook", "") if isinstance(options, dict) else ""
+    return HOOK_COMMAND in str(hook)
+
+
+def _install_opencode(
+    target: pathlib.Path,
+    settings: dict[str, object],
+    store_root: pathlib.Path | None,
+    *,
+    mcp: bool = False,
+) -> pathlib.Path:
+    if store_root is None:
+        raise ValidationError(
+            [FieldError("store", "opencode setup requires an explicit Store; pass --store")]
+        )
+    resolved = str(pathlib.Path(store_root).resolve())
+    period_ms = int(
+        Config.load(pathlib.Path(store_root)).write.capture_period_seconds * 1000
+    )
+    entry = {
+        "package": plugin_source(),
+        "options": {
+            "hook": hook_command(moments.HOST_OPENCODE, store_root),
+            "store": resolved,
+            "distillTitle": DISTILL_SESSION_TITLE,
+            "periodMs": period_ms,
+        },
+    }
+    plugins = settings.setdefault("plugins", [])
+    if not isinstance(plugins, list):
+        raise ValidationError([FieldError("settings.plugins", "must be an array")])
+    kept = [existing for existing in plugins if not _is_managed(existing)]
+    settings["plugins"] = [*kept, entry]
+    if mcp:
+        _merge_opencode_mcp(settings, store_root)
+    rendered = json.dumps(settings, indent=SETTINGS_INDENT, sort_keys=True) + "\n"
+    if not target.exists() or target.read_text(encoding="utf-8") != rendered:
+        _atomic_write(target, rendered)
+    _install_skill(target.parent / SKILL_PATH)
+    return target
+
+
+def _merge_opencode_mcp(settings: dict[str, object], store_root: pathlib.Path) -> None:
+    root = settings.setdefault("mcp", {})
+    if not isinstance(root, dict):
+        raise ValidationError([FieldError("settings.mcp", "must be an object")])
+    servers = root.setdefault("servers", {})
+    if not isinstance(servers, dict):
+        raise ValidationError([FieldError("settings.mcp.servers", "must be an object")])
+    expected: dict[str, object] = {
+        "type": "local",
+        "command": [mcp_binary()],
+        "environment": {"AGENT_MEMORY_STORE": str(pathlib.Path(store_root).resolve())},
+    }
+    existing = servers.get(MCP_SERVER)
+    if existing is not None and existing != expected:
+        raise ValidationError(
+            [
+                FieldError(
+                    f"settings.mcp.servers.{MCP_SERVER}",
+                    "already exists with different values",
+                )
+            ]
+        )
+    servers[MCP_SERVER] = expected
 
 
 def hook_command(

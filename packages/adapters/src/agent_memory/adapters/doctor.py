@@ -167,6 +167,8 @@ def _hook_checks(
     store_root: pathlib.Path,
     settings_path: pathlib.Path,
 ) -> list[Check]:
+    if host == moments.HOST_OPENCODE:
+        return _plugin_checks(configured, store_root)
     hooks = configured.get(setup.HOOKS_KEY)
     if not isinstance(hooks, dict):
         return [Check("HOOK_INVALID", False, "settings.hooks is missing or not an object")]
@@ -196,6 +198,26 @@ def _hook_checks(
             "HOOK_OK" if not failures else "HOOK_INVALID",
             not failures,
             "all lifecycle hooks installed once" if not failures else "; ".join(failures),
+        )
+    ]
+
+
+def _plugin_checks(configured: dict[str, object], store_root: pathlib.Path) -> list[Check]:
+    plugins = configured.get("plugins")
+    if not isinstance(plugins, list):
+        return [Check("HOOK_INVALID", False, "settings.plugins is missing or not an array")]
+    expected_store = str(store_root.resolve())
+    managed = [entry for entry in plugins if setup._is_managed(entry)]
+    failures = []
+    if len(managed) != 1:
+        failures.append(f"found {len(managed)} managed plugin entries")
+    elif expected_store not in json.dumps(managed[0]):
+        failures.append(f"plugin does not pin Store {expected_store}")
+    return [
+        Check(
+            "HOOK_OK" if not failures else "HOOK_INVALID",
+            not failures,
+            "memory plugin installed once" if not failures else "; ".join(failures),
         )
     ]
 
@@ -287,6 +309,13 @@ def _mcp_check(
             and str(store_root) in rendered
         )
         return Check("MCP_OK" if ok else "MCP_INVALID", ok, "Codex MCP server configuration")
+    if host == moments.HOST_OPENCODE:
+        mcp_root = configured.get("mcp") if isinstance(configured, dict) else None
+        servers = mcp_root.get("servers") if isinstance(mcp_root, dict) else None
+        server = servers.get(setup.MCP_SERVER) if isinstance(servers, dict) else None
+        rendered = json.dumps(server) if server is not None else ""
+        ok = setup.mcp_binary() in rendered and str(store_root.resolve()) in rendered
+        return Check("MCP_OK" if ok else "MCP_INVALID", ok, f"{setup.MCP_SERVER} local server")
     if host == moments.HOST_CLAUDE_CODE:
         path = target.parent.parent / ".claude.json"
         try:

@@ -12,6 +12,15 @@ transport, host-process, and response-shape failures are observable executor fai
 Distillation retains the unsettled archive backlog instead of treating an empty response as a
 completed projection.
 
+Hosts without lifecycle events keep the same three moments through a plugin the host
+loads: prompt admission injects, periodic and tool-driven capture pauses, compaction
+evicts. Capture layers overlap so a close before any flush is recovered by startup
+backfill, never lost. Events carry the full session history on every trigger; the
+archive watermark slices what it already saw, so replays archive once. `opencode`
+is the first host of this kind. Its headless entry exposes no tool, turn-count,
+or workdir scoping flags, so the dialect pins a fresh JSON run and distill
+runs tool-less by driver convention.
+
 `muse-code` is the canonical Muse Code identity and `muse` is only a setup alias and binary
 name. Muse lifecycle events use the existing moments, and only root-session material enters the
 archive. Muse's native memory remains independent and is never copied, synchronized, or treated

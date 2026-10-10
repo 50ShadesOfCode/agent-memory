@@ -31,6 +31,16 @@
 - Verify the Codex dialect end to end, including the one-time hook trust review; it is
   covered by unit tests only.
 
+## OpenCode host follow-ups
+
+Deferred minor findings from the `feat/opencode-host` review pass; the
+fixable ones landed, one residual stays documented.
+
+- Positional watermark versus shape-shifting history: if a message's
+  extracted text changes shape between reads, positions shift and items are
+  missed or duplicated with no content check. No cheap fix — a content-aware
+  watermark is a core change. Revisit if observed in traces.
+
 ## Muse Code follow-ups
 
 - Run the isolated Muse shell, lifecycle hook, and stdio MCP sandbox preflight on an installed,

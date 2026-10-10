@@ -23,6 +23,7 @@ import time
 
 from agent_memory.core import observation
 from agent_memory.core.config import MUSE_SETTINGS_ENV_VAR
+from agent_memory.core.sessions import DISTILL_SESSION_TITLE
 
 from .credentials import VertexCredentials
 
@@ -30,6 +31,7 @@ HOST_CLAUDE_CODE = "claude-code"
 HOST_CODEX = "codex"
 HOST_HERMES = "hermes"
 HOST_MUSE_CODE = "muse-code"
+HOST_OPENCODE = "opencode"
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 BINARIES = {
@@ -37,6 +39,7 @@ BINARIES = {
     HOST_CODEX: ("codex", "gpt-5.6-sol"),
     HOST_HERMES: ("hermes", "google/gemini-3.7-flash"),
     HOST_MUSE_CODE: ("muse", ""),
+    HOST_OPENCODE: ("opencode", ""),
 }
 MEM_TOOL_PATTERN = "Bash(mem:*)"
 CLAUDE_NATIVE_TOOLS = "Write,Edit,NotebookEdit,WebSearch,WebFetch,Task"
@@ -91,6 +94,7 @@ class Dialect:
     """How one host is spoken to. Every method is pure, so the shape is testable offline."""
 
     prompt_on_stdin = True
+    empty_label: str | None = None
 
     def command(
         self,
@@ -166,6 +170,8 @@ class ClaudeCodeDialect(Dialect):
 class CodexDialect(Dialect):
     """No system-prompt flag, so it rides in the prompt; and stdout carries the whole session
     transcript, so the final message is read from the file the host writes it to."""
+
+    empty_label = "Codex"
 
     def command(
         self,
@@ -251,6 +257,8 @@ class HermesDialect(Dialect):
 
 class MuseCodeDialect(Dialect):
     """Muse's headless transport: JSONL out, prompt file in, sandbox kept on."""
+
+    empty_label = "Muse"
 
     def command(
         self,
@@ -352,11 +360,67 @@ class MuseCodeDialect(Dialect):
             raise ValueError("Muse experiment workspace contains native .agents/memory")
 
 
+class OpencodeDialect(Dialect):
+    """Headless `run` reads the prompt from stdin and emits JSONL; every run starts a
+    fresh session, so no conversational memory rides along. OpenCode ships no native
+    memory layer to switch off — the headless shape is the isolation.
+
+    Distill sessions carry DISTILL_SESSION_TITLE so the capture plugin stands down for them."""
+
+    empty_label = "OpenCode"
+
+    def command(
+        self,
+        spec,
+        *,
+        tools_enabled,
+        system_prompt,
+        max_turns,
+        store_root,
+        answer_file,
+        tool_pattern=MEM_TOOL_PATTERN,
+        workdir=None,
+    ):
+        command = [spec.binary, "run", "--format", "json", "--title", DISTILL_SESSION_TITLE]
+        if spec.model:
+            command += ["--model", spec.model]
+        return command
+
+    def stdin(self, prompt: str, system_prompt: str) -> str:
+        return (system_prompt + PROMPT_SEPARATOR + prompt) if system_prompt else prompt
+
+    def answer(self, stdout: str, answer_file: pathlib.Path) -> str:
+        current: str | None = None
+        chunks: list[str] = []
+        for line in stdout.splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            part = event.get("part")
+            if not isinstance(part, dict) or part.get("type") != "text":
+                continue
+            text = part.get("text")
+            if not isinstance(text, str):
+                continue
+            message = part.get("messageID")
+            if message != current:
+                current, chunks = message, []
+            chunks.append(text)
+        return "".join(chunks).strip()
+
+    def disables_native_memory(self, rendered_command: str) -> bool:
+        return True
+
+
 DIALECTS: dict[str, Dialect] = {
     HOST_CLAUDE_CODE: ClaudeCodeDialect(),
     HOST_CODEX: CodexDialect(),
     HOST_HERMES: HermesDialect(),
     HOST_MUSE_CODE: MuseCodeDialect(),
+    HOST_OPENCODE: OpencodeDialect(),
 }
 
 
@@ -552,9 +616,10 @@ class Host:
             detail = (completed.stderr.strip() or completed.stdout.strip())[:ERROR_EXCERPT]
             return HostResult("", False, elapsed, detail or "non-zero exit with no output")
         text = self.dialect.answer(completed.stdout, answer_file)
-        if self.spec.name in (HOST_CODEX, HOST_MUSE_CODE) and not text:
-            label = "Codex" if self.spec.name == HOST_CODEX else "Muse"
-            return HostResult("", False, elapsed, f"missing or empty {label} final message")
+        if self.dialect.empty_label is not None and not text:
+            return HostResult(
+                "", False, elapsed, f"missing or empty {self.dialect.empty_label} final message"
+            )
         return HostResult(text, True, elapsed)
 
     def _environment(
