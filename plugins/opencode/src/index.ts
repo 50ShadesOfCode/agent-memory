@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -60,13 +60,26 @@ function storeLog(store: string, message: string): void {
   }
 }
 
-function forwardToHook(hook: string, payload: unknown): boolean {
-  const result = spawnSync("/bin/sh", ["-c", hook], {
-    input: JSON.stringify(payload),
-    timeout: 60_000,
-    stdio: ["pipe", "ignore", "ignore"],
+function forwardToHook(hook: string, payload: unknown, timeoutMs = 60_000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(ok);
+    };
+    const child = spawn("/bin/sh", ["-c", hook], { stdio: ["pipe", "ignore", "ignore"] });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(false);
+    }, timeoutMs);
+    child.on("error", () => finish(false));
+    child.on("close", (code) => finish(code === 0));
+    child.stdin.on("error", () => {});
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
   });
-  return !result.error && result.status === 0;
 }
 
 async function pointerOf(ctx: Context, sessionID: string): Promise<string | null> {
@@ -126,9 +139,9 @@ async function capture(
     if (!urgent) {
       const now = Date.now();
       if (now - (lastRun.get(sessionID) ?? 0) < cfg.throttleMs) return;
-      lastRun.set(sessionID, now);
     }
-    if (!forwardToHook(cfg.hook, buildHookEvent(sessionID, trigger, history))) return;
+    if (!await forwardToHook(cfg.hook, buildHookEvent(sessionID, trigger, history))) return;
+    lastRun.set(sessionID, Date.now());
     await ctx.storage.set(`pointer:${sessionID}`, pointer);
     await trackSession(ctx, sessionID);
   } catch (error) {

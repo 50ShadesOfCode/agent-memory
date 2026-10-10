@@ -412,7 +412,7 @@ class OpencodeDialect(Dialect):
         return "".join(chunks).strip()
 
     def disables_native_memory(self, rendered_command: str) -> bool:
-        return "--format" in rendered_command
+        return True
 
 
 DIALECTS: dict[str, Dialect] = {

@@ -33,30 +33,13 @@
 
 ## OpenCode host follow-ups
 
-Deferred minor findings from the `feat/opencode-host` review pass; none blocks
-the adapter, each is a small test-plus-fix when taken.
+Deferred minor findings from the `feat/opencode-host` review pass; the
+fixable ones landed, one residual stays documented.
 
-- Empty-answer exit-0 returns `ok=True` for the opencode dialect and skips
-  Host-level retries, unlike codex/muse; safe end to end only because
-  `HostReasoner` raises on empty. Add `HOST_OPENCODE` to the empty-answer
-  failure tuple in `hosts.py` with a test.
-- `disables_native_memory` for opencode is a substring check for `--format`;
-  OpenCode ships no native layer, so return `True` unconditionally instead.
-- `OpencodeDialect.command` silently ignores `tools_enabled`, `max_turns`
-  and `workdir`; harmless while distill runs tool-less, but document the
-  limitation — there is no tool-scoping equivalent in `opencode run`.
-- Throttle stamps the session before the history read, so a no-op capture
-  suppresses a follow-up capture with genuinely new items for up to 5 s;
-  move the stamp to after the spawn decision.
-- `pipeHook` blocks the awaited prompt path up to the hook self-timeout
-  (~20 s worst case); consider async spawn for prompt-admission capture.
-- `HOOK_COMMAND` substring matching in setup/doctor can false-positive on
-  an unrelated plugin entry mentioning `mem-hook`; match against
-  `options.hook` instead.
 - Positional watermark versus shape-shifting history: if a message's
   extracted text changes shape between reads, positions shift and items are
-  missed or duplicated with no content check; acceptable residual, revisit
-  if observed.
+  missed or duplicated with no content check. No cheap fix — a content-aware
+  watermark is a core change. Revisit if observed in traces.
 
 ## Muse Code follow-ups
 
