@@ -7,6 +7,7 @@ import pytest
 from agent_memory.adapters import doctor, moments, setup
 from agent_memory.core.errors import ValidationError
 from agent_memory.core.store import Store
+from agent_memory.executor import hosts
 
 
 @pytest.fixture(autouse=True)
@@ -93,3 +94,43 @@ def test_doctor_ready_with_binary_settings_and_plugin(tmp_path, monkeypatch):
     assert report.status == doctor.READY
     assert any(check.code == "HOOK_OK" for check in report.checks)
 
+
+
+def _espec():
+    return hosts.HostSpec(name="opencode", binary="opencode", model="m")
+
+
+def test_opencode_routes_through_headless_run_with_json_output(tmp_path):
+    command = hosts.DIALECTS["opencode"].command(
+        _espec(),
+        tools_enabled=False,
+        system_prompt="keeper",
+        max_turns=7,
+        store_root=None,
+        answer_file=tmp_path / "a.txt",
+    )
+
+    assert command[:2] == ["opencode", "run"]
+    assert "--format" in command and "json" in command
+
+
+def test_opencode_answer_keeps_only_the_last_message(tmp_path):
+    stdout = "\n".join(
+        [
+            '{"type":"text","part":{"type":"text","text":"stale ","messageID":"m1"}}',
+            '{"type":"text","part":{"type":"text","text":"final","messageID":"m2"}}',
+        ]
+    )
+
+    assert hosts.DIALECTS["opencode"].answer(stdout, tmp_path / "a.txt") == "final"
+
+
+def test_opencode_answer_joins_split_text_of_one_message(tmp_path):
+    stdout = "\n".join(
+        [
+            '{"type":"text","part":{"type":"text","text":"AGENT_","messageID":"m1"}}',
+            '{"type":"text","part":{"type":"text","text":"MEMORY_READY","messageID":"m1"}}',
+        ]
+    )
+
+    assert hosts.DIALECTS["opencode"].answer(stdout, tmp_path / "a.txt") == "AGENT_MEMORY_READY"

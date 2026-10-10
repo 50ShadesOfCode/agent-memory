@@ -30,6 +30,7 @@ HOST_CLAUDE_CODE = "claude-code"
 HOST_CODEX = "codex"
 HOST_HERMES = "hermes"
 HOST_MUSE_CODE = "muse-code"
+HOST_OPENCODE = "opencode"
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 BINARIES = {
@@ -37,6 +38,7 @@ BINARIES = {
     HOST_CODEX: ("codex", "gpt-5.6-sol"),
     HOST_HERMES: ("hermes", "google/gemini-3.7-flash"),
     HOST_MUSE_CODE: ("muse", ""),
+    HOST_OPENCODE: ("opencode", ""),
 }
 MEM_TOOL_PATTERN = "Bash(mem:*)"
 CLAUDE_NATIVE_TOOLS = "Write,Edit,NotebookEdit,WebSearch,WebFetch,Task"
@@ -352,11 +354,63 @@ class MuseCodeDialect(Dialect):
             raise ValueError("Muse experiment workspace contains native .agents/memory")
 
 
+class OpencodeDialect(Dialect):
+    """Headless `run` reads the prompt from stdin and emits JSONL; every run starts a
+    fresh session, so no conversational memory rides along. OpenCode ships no native
+    memory layer to switch off — the headless shape is the isolation."""
+
+    def command(
+        self,
+        spec,
+        *,
+        tools_enabled,
+        system_prompt,
+        max_turns,
+        store_root,
+        answer_file,
+        tool_pattern=MEM_TOOL_PATTERN,
+        workdir=None,
+    ):
+        command = [spec.binary, "run", "--format", "json"]
+        if spec.model:
+            command += ["--model", spec.model]
+        return command
+
+    def stdin(self, prompt: str, system_prompt: str) -> str:
+        return (system_prompt + PROMPT_SEPARATOR + prompt) if system_prompt else prompt
+
+    def answer(self, stdout: str, answer_file: pathlib.Path) -> str:
+        current: str | None = None
+        chunks: list[str] = []
+        for line in stdout.splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            part = event.get("part")
+            if not isinstance(part, dict) or part.get("type") != "text":
+                continue
+            text = part.get("text")
+            if not isinstance(text, str):
+                continue
+            message = part.get("messageID")
+            if message != current:
+                current, chunks = message, []
+            chunks.append(text)
+        return "".join(chunks).strip()
+
+    def disables_native_memory(self, rendered_command: str) -> bool:
+        return "--format" in rendered_command
+
+
 DIALECTS: dict[str, Dialect] = {
     HOST_CLAUDE_CODE: ClaudeCodeDialect(),
     HOST_CODEX: CodexDialect(),
     HOST_HERMES: HermesDialect(),
     HOST_MUSE_CODE: MuseCodeDialect(),
+    HOST_OPENCODE: OpencodeDialect(),
 }
 
 
