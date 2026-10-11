@@ -20,6 +20,9 @@ version heading on release.
   store. Projection after a write covers only touched files (`Indexer.sync_paths`),
   and the injected index renders from indexed rows. Full passes stay on explicit
   sync, rebuild and crash recovery.
+- Stress and soak coverage: 10k-record soak (recall p99 vs size, full rebuild
+  budget) plus concurrent writers at volume with zero loss
+  (`tests/system/test_soak.py`, `tests/system/test_concurrency_soak.py`).
 
 ## 0.1.0 — 2026-10-11
 

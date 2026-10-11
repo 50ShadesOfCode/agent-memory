@@ -57,3 +57,8 @@ Shape: 10k scripted memories; record throughput, recall p99 versus size,
 index rebuild time, correctness under concurrent writers.
 Scale/cost: offline, no models.
 Done: latency budgets plus confidence that scale does not corrupt.
+
+Measured 2026-10-11 (after the touched-files projection fix):
+single-write cost flat across sizes, recall p99 4.7 / 18.2 / 34.1 ms at
+1k / 5k / 10k, full rebuild of 10k in 23.2 s, 4 parallel writers x 150
+records with zero loss.
