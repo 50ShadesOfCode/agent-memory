@@ -4,7 +4,10 @@ All notable changes to this project are recorded here, newest first.
 Entries are added under `Unreleased` with each change and moved under a
 version heading on release.
 
-## Unreleased
+## 0.1.0 — 2026-10-11
+
+First release under our own roof: OpenCode host support, Unicode recall,
+twenty review findings fixed, and eight upstream hardening fixes merged.
 
 ### Added
 
