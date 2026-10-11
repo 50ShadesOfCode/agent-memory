@@ -609,9 +609,18 @@ class Store:
             AccessLog(connection).append(entries)
 
     def _at(self, path: pathlib.Path | None) -> MemoryRecord | None:
-        if path is None or not path.exists() or self.layout.type_of(path) is None:
+        if path is None or not path.exists():
             return None
-        return MemoryRecord.from_text(path.read_text(encoding="utf-8"), path)
+        type_name = self.layout.type_of(path)
+        if type_name is None:
+            return None
+        record = MemoryRecord.from_text(path.read_text(encoding="utf-8"), path)
+        record_module.validate(record, self.config, self.schemas.get(record.type))
+        if record.type != type_name:
+            raise ValidationError(
+                [FieldError("type", f"{record.type} lives outside its type directory")]
+            )
+        return record
 
     def _scan_for(self, name: str) -> pathlib.Path | None:
         for path in self.layout.truth_files():

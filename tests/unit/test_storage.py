@@ -193,3 +193,16 @@ def test_a_group_that_slugs_to_nothing_names_the_cause(store):
         )
     assert "topic" in {error.field for error in raised.value.errors}
     assert "ASCII" in " ".join(error.reason for error in raised.value.errors)
+
+
+def test_find_rejects_a_parseable_but_invalid_file_loudly(store):
+    rogue = store.layout.type_dir("fact") / "Not A Slug.md"
+    rogue.parent.mkdir(parents=True, exist_ok=True)
+    rogue.write_text(
+        "---\nname: Not A Slug\nabstract: rogue\ntype: fact\nweight: 1.0\n---\nbody\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="slug"):
+        store.find("Not A Slug")
+    assert "Not A Slug" not in [record.name for record in store.records()]
