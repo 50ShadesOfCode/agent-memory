@@ -128,15 +128,16 @@ async function capture(
   cfg: RunConfig,
   sessionID: string,
   trigger: string,
-  urgent = false,
+  force = false,
 ): Promise<void> {
   try {
     if (await executorOwned(ctx, sessionID, cfg.distillTitle)) return;
     const messages = await ctx.session.context({ sessionID });
     const history = toHistoryItems(Array.isArray(messages) ? messages : []);
     const { items, pointer } = unseenItems(history, await pointerOf(ctx, sessionID));
-    if (items.length === 0 || pointer === null) return;
-    if (!urgent) {
+    if (history.length === 0) return;
+    if (!force) {
+      if (items.length === 0 || pointer === null) return;
       const now = Date.now();
       if (now - (lastRun.get(sessionID) ?? 0) < cfg.throttleMs) return;
     }
@@ -206,7 +207,7 @@ export default Plugin.define({
       if (typeof event?.sessionID === "string") await capture(outer, cfg, event.sessionID, "tool");
     });
     await outer.session.hook("compaction", async (event: any) => {
-      if (typeof event?.sessionID === "string") await capture(outer, cfg, event.sessionID, "compaction");
+      if (typeof event?.sessionID === "string") await capture(outer, cfg, event.sessionID, "compaction", true);
     });
     await outer.command.transform((editor: any) => {
       editor.add({
@@ -226,7 +227,7 @@ export default Plugin.define({
         const current = await outer.storage.get("sessions").catch(() => []);
         const ids: string[] = Array.isArray(current) ? current.filter((id) => typeof id === "string") : [];
         for (const sessionID of ids) {
-          await capture(outer, cfg, sessionID, "timer");
+          await capture(outer, cfg, sessionID, "timer", true);
         }
       })();
     }, opts.periodMs ?? DEFAULT_PERIOD_MS);
@@ -245,7 +246,7 @@ export default Plugin.define({
             type === "session.execution.succeeded" ||
             type === "session.execution.failed"
           ) {
-            await capture(outer, cfg, sessionID, "idle");
+            await capture(outer, cfg, sessionID, "idle", true);
           } else if (type === "session.deleted") {
             await forget(outer, sessionID);
           }

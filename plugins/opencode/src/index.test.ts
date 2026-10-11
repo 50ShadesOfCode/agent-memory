@@ -302,3 +302,31 @@ test("session.deleted forgets the session", async () => {
     done();
   }
 });
+
+test("prompt always forwards, tool skips what is already sent", async () => {
+  const dir = store();
+  const marker = join(dir, "forwards");
+  const hook = `printf 'x\\n' >> ${marker}`;
+  const s = stub({ hook, store: dir, throttleMs: 60000 }, messages());
+  const done = await start(s);
+  const lines = () =>
+    readFileSync(marker, "utf-8").split("\n").filter((l) => l !== "");
+  const lineCount = async () => {
+    try {
+      return lines().length;
+    } catch {
+      return -1;
+    }
+  };
+  try {
+    await s.handlers["prompt"]({ sessionID: "s-force", prompt: { text: "hi", files: [] } });
+    await waitFor(async () => ((await lineCount()) >= 1 ? true : undefined));
+    await s.handlers["prompt"]({ sessionID: "s-force", prompt: { text: "hi", files: [] } });
+    await waitFor(async () => ((await lineCount()) >= 2 ? true : undefined));
+    await s.handlers["tool:execute.after"]({ sessionID: "s-force" });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(lines().length, 2);
+  } finally {
+    done();
+  }
+});
