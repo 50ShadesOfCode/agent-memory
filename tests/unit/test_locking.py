@@ -53,10 +53,14 @@ def test_store_lock_reenters_in_the_same_thread(tmp_path):
     layout = _layout(tmp_path)
     entered = []
     with store_lock(layout):
-        with store_lock(layout):
-            entered.append(True)
+        entered.append(_reenter(layout))
 
     assert entered == [True]
+
+
+def _reenter(layout) -> bool:
+    with store_lock(layout):
+        return True
 
 
 def test_concurrent_mark_updates_lose_nothing(tmp_path, clock):
