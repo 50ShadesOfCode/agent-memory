@@ -118,12 +118,48 @@ def _apply(
             continue
         accepted.append(record_spec)
         origins.append(spec)
-    result = store.record_many(accepted) if accepted else BatchResult(written=[], rejected=[])
+    pairs = _drop_replays(store, accepted, origins)
+    result = (
+        store.record_many([spec for spec, _ in pairs])
+        if pairs
+        else BatchResult(written=[], rejected=[])
+    )
     for item in result.rejected:
-        leftovers.append((origins[item.index], list(item.errors)))
+        leftovers.append((pairs[item.index][1], list(item.errors)))
     if parse_errors:
         leftovers.append(({"raw": "unparsed lines"}, parse_errors))
     return result, [(spec, errors) for spec, errors in leftovers if "raw" not in spec]
+
+
+def _drop_replays(
+    store: Store,
+    accepted: list[dict[str, object]],
+    origins: list[dict[str, object]],
+) -> list[tuple[dict[str, object], dict[str, object]]]:
+    """A replayed batch must not write twice: specs reproducing an existing active
+    record from the same evidence are already applied, so only new ones reach writes."""
+    known = {
+        (record.type, record.abstract, _provenance_key(record.provenance))
+        for record in store.records()
+    }
+    kept: list[tuple[dict[str, object], dict[str, object]]] = []
+    for spec, origin in zip(accepted, origins):
+        key = (
+            str(spec.get("type") or ""),
+            str(spec.get("abstract") or "").strip(),
+            _provenance_key(spec.get("provenance")),
+        )
+        if key in known:
+            continue
+        known.add(key)
+        kept.append((spec, origin))
+    return kept
+
+
+def _provenance_key(provenance: object) -> tuple[str, ...]:
+    if isinstance(provenance, list):
+        return tuple(sorted(str(item) for item in provenance))
+    return (str(provenance),) if provenance else ()
 
 
 def _describe(leftovers: list[tuple[dict[str, object], list[FieldError]]]) -> str:
