@@ -26,6 +26,7 @@ class BatchReport:
     rejected: tuple[str, ...]
     pending: int
     rounds: int = 1
+    skipped: int = 0
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -34,6 +35,7 @@ class BatchReport:
             "rejected": list(self.rejected),
             "pending": self.pending,
             "rounds": self.rounds,
+            "skipped": self.skipped,
         }
 
 
@@ -72,15 +74,20 @@ def distill(store: Store, session: str, messages: list[Message], ask: Ask) -> Di
         sheet = outcome.sheet
         specs, errors = outcome.specs, outcome.errors
         specs = queue.drain(session) + specs
-        result, leftovers = _apply(store, sheet, specs, errors)
+        result, leftovers, skipped, faults = _apply(store, sheet, specs, errors)
         for _ in range(config.repair_rounds):
             if not leftovers:
                 break
             reply = ask(prompts.repair(sheet.render(), _describe(leftovers)))
             retry, errors = reconcile.parse_operations(reply)
             if not retry:
+                faults += [f"{error.field}: {error.reason}" for error in errors]
                 break
-            result_more, leftovers = _apply(store, sheet, retry, errors)
+            result_more, leftovers, skipped_more, faults_more = _apply(
+                store, sheet, retry, errors
+            )
+            skipped += skipped_more
+            faults += faults_more
             result = BatchResult(
                 written=result.written + result_more.written, rejected=result_more.rejected
             )
@@ -91,9 +98,10 @@ def distill(store: Store, session: str, messages: list[Message], ask: Ask) -> Di
             BatchReport(
                 pointer=render_pointer(sheet.pointer),
                 written=tuple(record.name for record in result.written),
-                rejected=tuple(str(item.errors) for item in result.rejected),
+                rejected=tuple(str(item.errors) for item in result.rejected) + tuple(faults),
                 pending=queued,
                 rounds=outcome.rounds,
+                skipped=skipped,
             )
         )
     return DistillReport(session=session, batches=tuple(reports), consumed=distilled)
@@ -104,10 +112,13 @@ def _apply(
     sheet: reconcile.Sheet,
     specs: list[dict[str, object]],
     parse_errors: list[FieldError],
-) -> tuple[BatchResult, list[tuple[dict[str, object], list[FieldError]]]]:
+) -> tuple[
+    BatchResult, list[tuple[dict[str, object], list[FieldError]]], int, list[str]
+]:
     leftovers: list[tuple[dict[str, object], list[FieldError]]] = []
     accepted: list[dict[str, object]] = []
     origins: list[dict[str, object]] = []
+    skipped = 0
     for spec in specs:
         problems = reconcile.check(spec, sheet)
         if problems:
@@ -115,6 +126,7 @@ def _apply(
             continue
         record_spec = reconcile.to_record_spec(spec, sheet)
         if record_spec is None:
+            skipped += 1
             continue
         accepted.append(record_spec)
         origins.append(spec)
@@ -126,9 +138,13 @@ def _apply(
     )
     for item in result.rejected:
         leftovers.append((pairs[item.index][1], list(item.errors)))
-    if parse_errors:
-        leftovers.append(({"raw": "unparsed lines"}, parse_errors))
-    return result, [(spec, errors) for spec, errors in leftovers if "raw" not in spec]
+    faults = [f"{error.field}: {error.reason}" for error in parse_errors]
+    return (
+        result,
+        [(spec, errors) for spec, errors in leftovers if "raw" not in spec],
+        skipped,
+        faults,
+    )
 
 
 def _drop_replays(
