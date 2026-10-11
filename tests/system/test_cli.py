@@ -136,7 +136,10 @@ def test_export_import_round_trip_preserves_the_recall_result_set(cli, tmp_path)
 
     destination_root = tmp_path / "migrated"
     assert main(["--store", str(destination_root), "--json", "init"]) == EXIT_OK
-    assert main(["--store", str(destination_root), "--json", "import", str(dump)]) == EXIT_OK
+    assert (
+        main(["--store", str(destination_root), "--json", "import", "--force", str(dump)])
+        == EXIT_OK
+    )
 
     destination = Store(destination_root)
     after = {query: {hit.name for hit in Recall(destination).recall(query)} for query in queries}
@@ -529,3 +532,37 @@ def test_sleep_can_be_handed_a_reasoner_whose_verdicts_reach_the_store(cli, monk
     report = cli("sleep", "--reason", "host")
     assert [decision["proposal"] for decision in report["decisions"]] == [proposal["id"]]
     assert proposal["id"] not in {open_one["id"] for open_one in cli("proposals")["proposals"]}
+
+
+def test_gc_refuses_executor_owned_sessions_even_forced(cli, monkeypatch, capsys):
+    from agent_memory.core.config import EXECUTOR_ENV_VAR
+
+    monkeypatch.setenv(EXECUTOR_ENV_VAR, "1")
+    payload = cli("gc", "--force", expect=EXIT_INVALID)
+
+    assert payload["errors"][0]["field"] == "gc"
+
+
+def test_gc_needs_force_without_a_terminal(cli):
+    assert cli("gc", expect=EXIT_INVALID)["errors"][0]["field"] == "gc"
+    assert cli("gc", "--force")["removed"] == []
+
+
+def test_import_refuses_executor_owned_sessions(cli, monkeypatch, tmp_path):
+    from agent_memory.core.config import EXECUTOR_ENV_VAR
+
+    monkeypatch.setenv(EXECUTOR_ENV_VAR, "1")
+
+    payload = cli("import", str(tmp_path / "nothing.json"), "--force", expect=EXIT_INVALID)
+
+    assert payload["errors"][0]["field"] == "import"
+
+
+def test_decide_refuses_executor_owned_sessions(cli, monkeypatch):
+    from agent_memory.core.config import EXECUTOR_ENV_VAR
+
+    monkeypatch.setenv(EXECUTOR_ENV_VAR, "1")
+
+    payload = cli("decide", "whatever", "--accept", expect=EXIT_INVALID)
+
+    assert payload["errors"][0]["field"] == "decide"

@@ -20,8 +20,32 @@ version heading on release.
 
 ### Fixed
 
-- Russian queries retrieve Russian records (Cyrillic letters kept in the
-  FTS query tokenizer).
+- Russian and other non-Latin queries retrieve matching records.
+- Archive, watermark and pending writes are serialized through a
+  re-entrant store lock; watermark marks are written atomically, and a
+  corrupt mark file fails loudly naming the file.
+- Malformed frontmatter (colon-less lines, duplicate or empty keys),
+  non-numeric weights and list-valued custom fields are rejected instead
+  of silently coerced; bulk reads skip bad files with a report.
+- Truth files are validated on every read path, not just at index time.
+- Distill replays skip already-applied specs instead of duplicating memories;
+  skipped operations and executor parse faults are reported in the batch.
+- Legacy migration backfills missing timestamps instead of emitting null.
+- Access-log writes are serialized under the store lock on a short connection.
+- Recalled entries and the injected index are marked as data, not instructions.
+- Scope spelling is normalized once for the SQL prefilter and the postfilter.
+- Feedback is recorded as a usage signal and settled by Manage in batch.
+- Host errors are redacted at construction; hook signals degrade safely.
+- Hook failure log redacts credential-shaped values via one shared scrubber.
+- Supersede revalidates the successor under the same writer lock.
+- Capture re-forwards full history on human-rate triggers so a failed pipe
+  cannot strand material.
+- `gc`, `import` and `decide` refuse executor-owned sessions; `gc` and
+  `import` need `--force` without a terminal.
+- Moves preserve identity, provenance and links instead of re-recording.
+- Interrupted merges resume by adopting their own target; staged temp files
+  are reaped on startup.
+- Multiline config values round-trip through TOML blocks.
 - Archive, watermark and pending writes are serialized through a
   re-entrant store lock; watermark marks are written atomically, and a
   corrupt mark file fails loudly naming the file.

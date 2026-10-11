@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import pathlib
 import sys
 from collections.abc import Sequence
@@ -13,7 +14,7 @@ from agent_memory.core import context as context_module
 from agent_memory.core import distill as distill_module
 from agent_memory.core import migrate as migrate_module
 from agent_memory.core import pending, portability, prompts, reasoning, sessions, triggers
-from agent_memory.core.config import REASONER_ENDPOINT, REASONER_HOST
+from agent_memory.core.config import EXECUTOR_ENV_VAR, REASONER_ENDPOINT, REASONER_HOST
 from agent_memory.core.errors import FieldError, MemoryStoreError, ValidationError
 from agent_memory.core.manage import Manage
 from agent_memory.core.observation import invoke as observe_invocation
@@ -197,6 +198,11 @@ def _parser() -> argparse.ArgumentParser:
 
     importer = subparsers.add_parser("import", help="import an export into this store")
     importer.add_argument("source")
+    importer.add_argument(
+        "--force",
+        action="store_true",
+        help="confirm a human runs this without a terminal",
+    )
     importer.set_defaults(handler=_import)
 
     sleeper = subparsers.add_parser("sleep", help="run the sleep-time Manage pass")
@@ -217,6 +223,11 @@ def _parser() -> argparse.ArgumentParser:
 
     collector = subparsers.add_parser(
         "gc", help="physically remove invalid files; the only deletion entry, human-run"
+    )
+    collector.add_argument(
+        "--force",
+        action="store_true",
+        help="confirm a human runs this without a terminal",
     )
     collector.set_defaults(handler=_gc)
 
@@ -480,6 +491,7 @@ def _export(store: Store, args: argparse.Namespace) -> dict[str, object]:
 
 
 def _import(store: Store, args: argparse.Namespace) -> dict[str, object]:
+    _confirm_human("import", args)
     written = portability.read_import(store, pathlib.Path(args.source))
     return {"imported": written}
 
@@ -505,7 +517,28 @@ def _reasoner(store: Store, args: argparse.Namespace) -> Reasoner | None:
     return distiller.distiller(executor)
 
 
+def _refuse_agent_context(command: str) -> None:
+    """Permanent and cross-store operations answer to a human at a terminal.
+
+    Executor-owned sessions, hooks and MCP calls never qualify, with or without
+    flags; anything else without a terminal confirms explicitly with --force.
+    """
+    if os.environ.get(EXECUTOR_ENV_VAR):
+        raise ValidationError(
+            [FieldError(command, "refuses executor-owned sessions; a human runs this")]
+        )
+
+
+def _confirm_human(command: str, args: argparse.Namespace) -> None:
+    _refuse_agent_context(command)
+    if not args.force and not sys.stdin.isatty():
+        raise ValidationError(
+            [FieldError(command, "needs --force without a terminal")]
+        )
+
+
 def _gc(store: Store, args: argparse.Namespace) -> dict[str, object]:
+    _confirm_human("gc", args)
     return {"removed": store.gc()}
 
 
@@ -514,6 +547,7 @@ def _proposals(store: Store, args: argparse.Namespace) -> dict[str, object]:
 
 
 def _decide(store: Store, args: argparse.Namespace) -> dict[str, object]:
+    _refuse_agent_context("decide")
     parts = json.loads(pathlib.Path(args.parts).read_text(encoding="utf-8")) if args.parts else []
     verdict = reasoning.parse(
         json.dumps(

@@ -5,11 +5,6 @@
 - Evaluate the memory-first reading policy with observed exposure before attributing
   answer changes to bounded Trace or optional Vector candidates.
 
-## Management follow-ups
-
-- Decide explicit confirmation and host-level authorization for permanent GC, import and
-  cross-store changes; CLI labels alone do not identify a human.
-
 ## Executor follow-ups
 
 - Replace the host-CLI reasoner with an executor-owned agent loop: native tool use, a
