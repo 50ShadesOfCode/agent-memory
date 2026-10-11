@@ -1,5 +1,7 @@
 # Endpoint opt-in and fail-closed reasoning
 
+Status: landed.
+
 ## Problem and target
 
 Host reasoning is the configured default, but the endpoint fallback still embeds a Tigerless

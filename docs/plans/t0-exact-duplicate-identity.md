@@ -1,5 +1,7 @@
 # T0 exact duplicate identity
 
+Status: landed.
+
 ## Goal
 
 Prevent unattended Sleep from invalidating distinct memories through a lossy token-set

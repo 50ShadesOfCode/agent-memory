@@ -1,5 +1,7 @@
 # Muse Code host adapter
 
+Status: landed.
+
 ## Scope
 
 Add Muse Code as a fourth adapter without changing Store truth, Memory representation, Recall,

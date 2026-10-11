@@ -1,5 +1,7 @@
 # Write scaling fix
 
+Status: landed.
+
 ## Problem
 
 Single `record()` cost grows linearly with store size (11 ms at n=100,

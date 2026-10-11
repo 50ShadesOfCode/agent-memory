@@ -1,5 +1,7 @@
 # Agent memory management operation audit
 
+Status: historical — superseded by the management operation boundaries design doc.
+
 Historical audit of the earlier correction boundary. Current management semantics
 are defined in [management operation boundaries](../design/management-operation-boundaries.md).
 

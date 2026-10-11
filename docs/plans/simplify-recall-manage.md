@@ -1,5 +1,7 @@
 # Simplify recall and management
 
+Status: landed.
+
 ## Current and target
 
 Recall currently searches current and optional historical Memory, then deep can widen the limit and mix a separate Raw BM25 corpus into current results. Trace already reads only evidence cited by a named Memory. The target read path searches Memory only, with an explicit limit and optional vector fusion; trace remains a separate bounded evidence read.

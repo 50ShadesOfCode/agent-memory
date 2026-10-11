@@ -1,5 +1,7 @@
 # Boundary distillation that works out of the box
 
+Status: landed.
+
 ## Problem and target
 
 On a fresh install, no conversation ever becomes a memory. The boundary hook launches the

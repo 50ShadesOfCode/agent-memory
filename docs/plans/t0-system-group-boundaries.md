@@ -1,5 +1,7 @@
 # Preserve system group boundaries during T0 maintenance
 
+Status: landed.
+
 ## Problem
 
 T0 clustering and spelling-based group merging treat every schema group as a topic.

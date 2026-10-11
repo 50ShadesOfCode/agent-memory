@@ -1,5 +1,7 @@
 # Scope eligibility before Recall candidate limits
 
+Status: landed.
+
 ## Problem and target
 
 Recall currently truncates FTS candidates before checking the requested path scope. A

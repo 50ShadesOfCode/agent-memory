@@ -1,5 +1,7 @@
 # OpenCode host adapter — spec
 
+Status: landed.
+
 Date: 2026-10-10. Branch: `feat/opencode-host`.
 
 ## Outcome

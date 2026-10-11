@@ -1,5 +1,7 @@
 # Managed Muse SDK backend
 
+Status: landed.
+
 ## Problem and target
 
 The Muse SDK can own `muse serve`, but an OpenRouter-backed agent-memory session still requires

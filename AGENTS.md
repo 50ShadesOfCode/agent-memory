@@ -3,7 +3,7 @@
 agent-memory is **Tigerless's agent-agnostic, local-first long-term memory runtime**: markdown
 files as the single source of truth, a rebuildable SQLite index, deterministic boundary-triggered
 writes, and an independent sleep-time Manage layer — shared by multiple agents (Claude Code,
-Codex CLI, Hermes) over one common memory store.
+Codex CLI, Muse Code, OpenCode, Hermes) over one common memory store.
 
 **Wedge**: the only memory system with a true independent Manage layer (value-based forgetting,
 sleep-time consolidation with authority tiers) on top of file truth — every competitor either

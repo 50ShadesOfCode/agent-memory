@@ -1,5 +1,7 @@
 # Benchmark and experiment design
 
+Status: active — tracks 1–3 and 5 done, track 4 running lite on free models.
+
 Five tracks, ordered by cost. Each states its question, arms, metric, scale,
 cost, and what counts as done. Offline tracks are deterministic and CI-able;
 live tracks report exposure alongside scores, and stop when the pilot does

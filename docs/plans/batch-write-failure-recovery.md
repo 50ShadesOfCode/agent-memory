@@ -1,5 +1,7 @@
 # Batch write failure recovery
 
+Status: landed.
+
 ## Problem
 
 The batch write loop sits outside its projection recovery boundary. An unexpected

@@ -1,5 +1,7 @@
 # Raw evidence capability merge
 
+Status: landed.
+
 Historical implementation plan. The current read policy is defined in
 [explicit raw evidence reads](../design/raw-evidence-reads.md); the deep Raw search
 described below has since been removed.
