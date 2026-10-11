@@ -27,7 +27,9 @@ than clock values.
 
 ## Per-file test map
 
-Unit files mirror core modules one to one; system files cover one behavior each
+Unit files mirror core modules one to one; cross-cutting scaling tests live
+beside them without a matching module. System files cover one behavior each
 (CLI, MCP, concurrency, entry-equivalence, exams, harness, interop, benchmarks,
-host integrations). When a module is added, renamed or split, its test file
-follows in the same change — the map lives in the tree layout, not in this doc.
+host integrations); one behavior means one file, no overlapping slices. When a module
+is added, renamed or split, its test file follows in the same change — the map lives
+in the tree layout, not in this doc.

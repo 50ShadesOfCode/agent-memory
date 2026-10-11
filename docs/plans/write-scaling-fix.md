@@ -18,7 +18,7 @@ The 10k stress slice cannot run at this cost (~100 min extrapolated).
 - MEMORY.md after a write reflects the touched records against the injected
   projection (search-index rows), not a reparse of all truth files. Byte
   budget and weight-floor rules unchanged; full render stays on rebuild/sync.
-- Crash recovery unchanged: snapshot touched files, restore, reproject touched.
+- Crash recovery restores touched files, then takes a full projection pass — conservative by design, since recovery must also cover files the failed write never reported.
 
 ## Units
 

@@ -44,3 +44,34 @@ def test_memory_index_fresh_after_single_write(store):
     assert record.is_active()
     text = store.layout.memory_index.read_text(encoding="utf-8")
     assert "fresh-fact" in text
+
+
+def test_memory_index_fresh_after_move_supersede_merge(store):
+    store.record(type="fact", name="move-me", abstract="move me detail", body="x")
+    store.record(type="fact", name="old-fact", abstract="old detail", body="x")
+    store.record(type="fact", name="new-fact", abstract="new detail", body="x")
+    store.record(type="fact", name="first", abstract="first plan", body="x")
+    store.record(type="fact", name="second", abstract="second plan", body="x")
+
+    store.move("move-me", "project", "moved-project")
+    assert "move-me" in store.layout.memory_index.read_text(encoding="utf-8")
+
+    store.supersede("old-fact", "new-fact")
+    text = store.layout.memory_index.read_text(encoding="utf-8")
+    assert "new-fact" in text
+    assert "old-fact" not in text
+
+    store.merge(["first", "second"], "Combined plan", "Combined body")
+    text = store.layout.memory_index.read_text(encoding="utf-8")
+    assert "[first-merged]" in text
+    assert "[first]" not in text and "[second]" not in text
+
+
+def test_out_of_band_edit_visible_only_after_sync(store):
+    store.record(type="fact", name="oob", abstract="out of band detail", body="x")
+    target = store.find("oob")
+    assert target is not None and target.path is not None
+    target.path.write_text(target.to_text().replace("out of band detail", "changed detail"))
+    assert "changed detail" not in store.layout.memory_index.read_text(encoding="utf-8")
+    store.sync_index()
+    assert "changed detail" in store.layout.memory_index.read_text(encoding="utf-8")

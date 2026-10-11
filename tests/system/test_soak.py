@@ -8,8 +8,8 @@ from agent_memory.core.recall import Recall
 SOAK_N = 10_000
 CHUNK = 500
 CHECKPOINTS = (1_000, 5_000, 10_000)
-BUDGET_RECALL_P99_MS = 500.0
-BUDGET_REBUILD_S = 120.0
+BUDGET_RECALL_P99_MS = {1_000: 100.0, 5_000: 200.0, 10_000: 300.0}
+BUDGET_REBUILD_S = 60.0
 PROBES_PER_CHECKPOINT = 20
 
 
@@ -57,7 +57,8 @@ def test_soak_recall_p99_vs_size_and_rebuild(store):
         if seeded in CHECKPOINTS:
             p99 = _probe(store, seeded)
             p99_by_size[seeded] = round(p99, 1)
-            assert p99 <= BUDGET_RECALL_P99_MS, f"recall p99 at n={seeded}: {p99:.1f}ms"
+            budget = BUDGET_RECALL_P99_MS[seeded]
+            assert p99 <= budget, f"recall p99 at n={seeded}: {p99:.1f}ms over {budget}ms"
 
     assert len(list(store.records())) == SOAK_N
 

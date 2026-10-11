@@ -1,6 +1,6 @@
 # Write path
 
-Agent writes and Manage rewrites share one validate, hash-diff and reindex pipeline.
+Agent writes and Manage rewrites share one validate, persist and project pipeline.
 Two write paths would diverge truth from projection silently.
 
 Raw sessions and provenance append once and stay. Distillation is a projection of
