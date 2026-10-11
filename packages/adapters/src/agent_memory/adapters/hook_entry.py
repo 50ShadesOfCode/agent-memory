@@ -27,6 +27,7 @@ from agent_memory.core.config import (
     MUSE_SETTINGS_ENV_VAR,
     STORE_ENV_VAR,
 )
+from agent_memory.core.redact import redacted
 from agent_memory.core.store import Store
 
 from . import capture as capture_module
@@ -251,7 +252,7 @@ def _log(store: Store | None, message: str) -> None:
     try:
         store.layout.state_dir.mkdir(parents=True, exist_ok=True)
         with (store.layout.state_dir / LOG_FILENAME).open("a", encoding="utf-8") as handle:
-            handle.write(message + "\n")
+            handle.write(redacted(message) + "\n")
     except OSError:
         return
 

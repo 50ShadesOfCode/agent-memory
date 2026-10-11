@@ -16,7 +16,6 @@ import dataclasses
 import json
 import os
 import pathlib
-import re
 import shutil
 import subprocess
 import tempfile
@@ -24,26 +23,10 @@ import time
 
 from agent_memory.core import observation
 from agent_memory.core.config import MUSE_SETTINGS_ENV_VAR
+from agent_memory.core.redact import redacted as _safe_detail
 from agent_memory.core.sessions import DISTILL_SESSION_TITLE
 
 from .credentials import VertexCredentials
-
-SECRET_PATTERNS = (
-    re.compile(r"sk-or-[A-Za-z0-9_-]+"),
-    re.compile(r"(?i)(bearer\s+)[^\s\"']+"),
-    re.compile(r'(?i)(api[_-]?key["\']?\s*[:=]\s*["\']?)[^\s,}\"\']+'),
-)
-
-
-def _replacement(match: re.Match[str]) -> str:
-    return f"{match.group(1)}[REDACTED]" if match.groups() else "[REDACTED]"
-
-
-def _safe_detail(detail: str) -> str:
-    safe = detail.strip()
-    for pattern in SECRET_PATTERNS:
-        safe = pattern.sub(_replacement, safe)
-    return safe
 
 HOST_CLAUDE_CODE = "claude-code"
 HOST_CODEX = "codex"

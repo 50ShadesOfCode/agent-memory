@@ -351,3 +351,13 @@ def test_hook_stays_exit_zero_when_signals_are_unsupported(store, monkeypatch, c
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(_stop_event(store))))
 
     assert hook_entry.main() == hook_entry.EXIT_OK
+
+
+def test_hook_failure_log_redacts_secrets(store):
+    from agent_memory.adapters import hook_entry
+
+    hook_entry._log(store, "boom with key sk-or-SUPER-SECRET-1")
+
+    logged = (store.root / ".state" / hook_entry.LOG_FILENAME).read_text(encoding="utf-8")
+    assert "sk-or-SUPER-SECRET-1" not in logged
+    assert "[REDACTED]" in logged
