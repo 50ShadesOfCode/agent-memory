@@ -1,6 +1,11 @@
 """Frontmatter dialect: parse and render round-trip, including inline arrays."""
 
+import pathlib
+
+import pytest
 from agent_memory.core import frontmatter
+from agent_memory.core.errors import ValidationError
+from agent_memory.core.record import MemoryRecord
 
 
 def _round_trip(fields, body):
@@ -73,3 +78,27 @@ def test_render_scalar_boolean_and_null():
 def test_split_document_with_no_closing_delimiter_returns_none_header():
     header, body = frontmatter.split_document("---\nname: test\nno closing marker\n")
     assert header is None
+
+
+def test_parse_rejects_colon_less_line():
+
+    with pytest.raises(ValidationError, match="frontmatter"):
+        frontmatter.parse("---\nname: x\nthis line has no colon\n---\nbody\n")
+
+
+def test_parse_rejects_duplicate_key():
+
+    with pytest.raises(ValidationError, match="frontmatter"):
+        frontmatter.parse("---\nname: x\nname: y\n---\nbody\n")
+
+
+def test_from_text_rejects_garbage_weight():
+    text = "---\nname: x\nabstract: y\ntype: decision\nweight: heavy\n---\nbody\n"
+    with pytest.raises(ValidationError, match="weight"):
+        MemoryRecord.from_text(text, pathlib.Path("x.md"))
+
+
+def test_from_text_rejects_list_valued_custom_field():
+    text = "---\nname: x\nabstract: y\ntype: decision\nproject:\n- a\n- b\n---\nbody\n"
+    with pytest.raises(ValidationError, match="project"):
+        MemoryRecord.from_text(text, pathlib.Path("x.md"))

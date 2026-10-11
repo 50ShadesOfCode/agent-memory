@@ -86,11 +86,22 @@ class MemoryRecord:
     @classmethod
     def from_text(cls, text: str, path: pathlib.Path | None = None) -> MemoryRecord:
         raw, body = frontmatter.parse(text)
+        for key, value in raw.items():
+            if key not in CORE_FIELDS and isinstance(value, list):
+                raise ValidationError(
+                    [FieldError(key, "custom fields must be scalars")]
+                )
         extra = {
             str(key): str(value)
             for key, value in raw.items()
             if key not in CORE_FIELDS and value is not None and not isinstance(value, list)
         }
+        weight = raw.get("weight")
+        if weight is not None:
+            try:
+                float(str(weight))
+            except (TypeError, ValueError):
+                raise ValidationError([FieldError("weight", "must be a number")]) from None
         return cls(
             name=str(raw.get("name") or ""),
             abstract=str(raw.get("abstract") or ""),

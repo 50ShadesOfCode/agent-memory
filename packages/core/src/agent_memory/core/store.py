@@ -576,7 +576,10 @@ class Store:
     def records(self, include_invalid: bool = False) -> list[MemoryRecord]:
         found: list[MemoryRecord] = []
         for path in self.layout.truth_files():
-            record = self._at(path)
+            try:
+                record = self._at(path)
+            except ValidationError:
+                continue
             if record is None:
                 continue
             if include_invalid or record.is_active():

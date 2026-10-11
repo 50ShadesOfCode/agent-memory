@@ -7,6 +7,8 @@ than silently reinterpreted.
 
 from __future__ import annotations
 
+from .errors import FieldError, ValidationError
+
 DELIMITER = "---"
 _TRUE = "true"
 _FALSE = "false"
@@ -53,8 +55,16 @@ def _parse_mapping(lines: list[str]) -> dict[str, object]:
             continue
         key, separator, value = raw.partition(":")
         if not separator:
-            continue
+            raise ValidationError(
+                [FieldError("frontmatter", f"line carries no field: {raw.strip()}")]
+            )
         key = key.strip()
+        if not key:
+            raise ValidationError(
+                [FieldError("frontmatter", f"line names no field: {raw.strip()}")]
+            )
+        if key in fields:
+            raise ValidationError([FieldError("frontmatter", f"duplicate field: {key}")])
         value = value.strip()
         if value == "":
             fields[key] = []
