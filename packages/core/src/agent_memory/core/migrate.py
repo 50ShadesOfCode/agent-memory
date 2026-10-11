@@ -84,10 +84,10 @@ def migrate(root: pathlib.Path) -> MigrationReport:
         for key_field in schema.key:
             fields.setdefault(key_field, str(fields.get("name")))
         status = str(fields.get("status") or STATUS_ACTIVE)
+        if not fields.get("updated"):
+            fields["updated"] = fields.get("created") or store.clock.now().isoformat()
         if retired or status == LEGACY_STATUS_RETIRED or fields.get("superseded_by"):
-            fields.setdefault("invalid_at", fields.get("updated"))
-            if not fields.get("invalid_at"):
-                fields["invalid_at"] = fields.get("updated")
+            fields["invalid_at"] = fields.get("updated") or store.clock.now().isoformat()
             invalidated.append(str(fields["name"]))
         fields.pop("status", None)
         target = store.layout.type_dir(new_type) / domain / (str(fields["name"]) + MEMORY_SUFFIX)

@@ -279,3 +279,70 @@ def test_a_four_domain_store_migrates_into_the_schema_layout(tmp_path, clock):
     assert everything["old-pref"].path.relative_to(root).parts[:2] == ("preference", "user")
     assert "old-pref" in report.invalidated
     assert not (root / "project").exists()
+
+
+def test_retired_legacy_file_without_updated_stays_invalid(tmp_path, clock):
+    from agent_memory.core import frontmatter, migrate
+    from agent_memory.core.store import Store
+
+    root = tmp_path / "legacy"
+    (root / "archive" / "retired" / "user").mkdir(parents=True)
+    (root / "archive" / "retired" / "user" / "old-pref.md").write_text(
+        frontmatter.render(
+            {
+                "name": "old-pref",
+                "abstract": "Used to like tea",
+                "type": "preference",
+                "status": "retired",
+                "created": "2026-01-01",
+                "author": "old",
+                "links": [],
+                "provenance": [],
+            },
+            "",
+        ),
+        encoding="utf-8",
+    )
+    (root / "config.toml").write_text(
+        '[storage]\ndomains = ["user", "project", "reference", "experience"]\n', encoding="utf-8"
+    )
+    migrate.migrate(root)
+    store = Store(root, clock=clock)
+    record = store.find("old-pref")
+
+    assert record is not None
+    assert not record.is_active()
+    assert record.invalid_at
+
+
+def test_legacy_file_without_abstract_is_reported_not_silently_indexed(tmp_path, clock):
+    from agent_memory.core import frontmatter, migrate
+    from agent_memory.core.store import Store
+
+    root = tmp_path / "legacy"
+    (root / "project").mkdir(parents=True)
+    (root / "project" / "no-abstract.md").write_text(
+        frontmatter.render(
+            {
+                "name": "no-abstract",
+                "type": "fact",
+                "status": "stale",
+                "created": "2026-01-01",
+                "updated": "2026-01-02",
+                "author": "old",
+                "links": [],
+                "provenance": [],
+            },
+            "Body.",
+        ),
+        encoding="utf-8",
+    )
+    (root / "config.toml").write_text(
+        '[storage]\ndomains = ["user", "project", "reference", "experience"]\n', encoding="utf-8"
+    )
+    migrate.migrate(root)
+
+    assert (root / "fact" / "project" / "no-abstract.md").is_file()
+    assert "fact/project/no-abstract.md" in Store(root, clock=clock).sync_index().unreadable
+    with pytest.raises(ValidationError, match="abstract"):
+        Store(root, clock=clock).find("no-abstract")
