@@ -7,7 +7,7 @@
 ![](https://img.shields.io/badge/version-0.1.0-369eff?labelColor=black&style=flat-square)
 ![](https://img.shields.io/badge/python-3.12+-ffcb47?labelColor=black&style=flat-square)
 ![](https://img.shields.io/badge/hosts-Claude%20Code%2C%20Codex%20CLI%2C%20Muse%20Code%2C%20OpenCode-ff80eb?labelColor=black&style=flat-square)
-![](https://img.shields.io/badge/dependencies-zero%20API%20keys-c4f042?labelColor=black&style=flat-square)
+![](https://img.shields.io/badge/dependencies-no%20vendor%20keys-c4f042?labelColor=black&style=flat-square)
 
 </div>
 
@@ -22,7 +22,8 @@ that store.
 Retrieval is local and ranked, and it answers with paths rather than pasted text — the agent
 opens each hit only as deep as the task needs. Writes do not wait for the agent to remember to
 make them: they fire at conversation boundaries. A sleep-time pass then consolidates and
-forgets by value, on its own clock. None of it needs an API key.
+forgets by value, on its own clock. Retrieval and management need no vendor key; reasoning
+(distillation, sleep verdicts) runs through your host's own login or an endpoint you configure.
 
 ## Two lines, one store
 
@@ -35,9 +36,11 @@ outgrows a listing.
 
 agent-memory is the two of them in one store: the retrieval engine indexes a filesystem the
 agent can also just read. Relations live as links inside the memories, a local index ranks
-them, and every hit resolves to a whole markdown file on disk. Recall gains the precision of a
-graph and a vector search without giving up a plain directory an agent can walk — and it stays
-fast, because nothing in the read path calls a model or crosses a network.
+them, and every hit resolves to a whole markdown file on disk. Ranked lexical retrieval runs
+over files the agent can also just read; links in frontmatter carry relations without a graph
+database, and a vector plugin fuses in only when explicitly enabled — all without giving up
+a plain directory an agent can walk. It stays fast because nothing in the read path calls
+a model or crosses a network.
 
 ## Retrieve by path, then read by level
 

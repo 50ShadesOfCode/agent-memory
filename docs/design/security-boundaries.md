@@ -4,8 +4,11 @@ Agents run autonomously, so the system fails safe. External input, upstream
 responses and agent decisions are hostile: validate, bound, reject illegal
 state, and deny by default.
 
-Secrets and raw PII never enter the repo, ordinary logs or traces; credential-
-shaped text is scrubbed before it reaches an error message or log line. The
+Secrets and raw PII never enter ordinary logs or traces; credential-
+shaped text is scrubbed before it reaches an error message or log line. Raw archived
+transcripts are the exception: they keep whatever the session contained, and a sleep
+commit versions the whole store including the archive — so a store repository must be
+treated as sensitive until sleep commits stop covering raw. The
 shared store serializes writers through one advisory lock, and frontend
 validation rejects malformed writes at the gate.
 

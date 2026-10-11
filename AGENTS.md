@@ -27,8 +27,9 @@ has no M, or buries it in the write path.
    `rm -rf .index/ && mem rebuild` must lose zero knowledge. Why: migration freedom, git-ability,
    platform parasitism (auto-memory compatible), user sovereignty.
 2. **Single write path.** Agent writes and Manage rewrites go through the same
-   validate → hash-diff → reindex pipeline. Why: two write paths inevitably diverge truth
-   from projection, silently.
+   validate → persist → project pipeline; a write projects only the files it touched,
+   full passes belong to explicit sync, rebuild and crash recovery. Why: two write paths
+   inevitably diverge truth from projection, silently.
 3. **Reads never mutate truth files.** Usage stats go to the index access log only; weight is
    settled back into frontmatter by Manage in batch. Why: otherwise every recall triggers
    reindex churn and git noise.
@@ -67,6 +68,9 @@ out of order is *incomplete*.
 1. **Plan.** Non-trivial changes start with a plan in `docs/plans/`. The plan's first unit
    updates the relevant `docs/design/` doc; every unit places tests before code.
 2. **Branch, isolate, sync.** One explicit task per branch, developed in its own worktree
+   (solo-owner exception: with the owner's explicit standing instruction, small tasks land
+   directly on main with the same order and checks; the rule above applies whenever more
+   than one writer exists)
    (Claude Code's built-in worktree tooling, which puts it at `.claude/worktrees/<branch>` —
    keep that path gitignored, and remove the worktree once its branch lands). **Experiment
    artefacts never land inside a worktree** — they go to the main working tree, because
@@ -121,7 +125,11 @@ out of order is *incomplete*.
 
 - **Trust nothing by default.** Treat external input, upstream responses, and agent decisions
   as hostile; validate, check bounds, reject illegal state, fail safe (deny by default).
-- **Least privilege.** Secrets and raw PII never enter the repo, ordinary logs, or traces.
+- **Least privilege.** Secrets and raw PII never enter ordinary logs or traces; credential-shaped
+  text is scrubbed before it reaches an error message or log line. Raw archived transcripts may
+  hold whatever the session contained, and a sleep commit versions them with the store — treat
+  any store repository as sensitive. Scoped sleep commits that leave raw out of git are an open
+  follow-up in docs/TODO.md.
 - **Guardrails at every chokepoint.** Frontmatter validation rejects malformed writes; the
   shared store serializes writers (flock); memory content is data, never instructions.
 - **Red-team the tests.** Unit and system tests carry adversarial cases — memory-poisoning

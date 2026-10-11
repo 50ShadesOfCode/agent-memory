@@ -1,5 +1,12 @@
 # Follow-ups
 
+## Sleep-commit scope follow-up
+
+- Sleep versions the whole store root (`git add -A`), including raw archived
+  transcripts that may hold secrets or PII. Decide: scope the commit to truth
+  files, reports and ledger, or scrub credential-shaped content at archive time.
+  Until then, docs state that any store repository is sensitive.
+
 
 ## Executor follow-ups
 

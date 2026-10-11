@@ -27,10 +27,7 @@ than clock values.
 
 ## Per-file test map
 
-Unit files mirror core modules one to one (store, recall, manage, schema,
-placement, locking, triggers, config, frontmatter, watermark, distill replay,
-host dialects, regression pins). System files cover CLI, concurrency,
-entry-equivalence, fixed-exam, harness, interop, locomo, recall-benchmark,
-growth stress, sleep stores, read observability, and each host integration
-(OpenCode plugin, Muse integration and preflight, judge hosts, management
-entries).
+Unit files mirror core modules one to one; system files cover one behavior each
+(CLI, MCP, concurrency, entry-equivalence, exams, harness, interop, benchmarks,
+host integrations). When a module is added, renamed or split, its test file
+follows in the same change — the map lives in the tree layout, not in this doc.
