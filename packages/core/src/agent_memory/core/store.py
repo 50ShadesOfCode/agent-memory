@@ -362,6 +362,7 @@ class Store:
                     [FieldError("status", "correction requires an active memory")]
                 )
             now = self.clock.timestamp()
+            previous = f"{current.abstract}\n\n{current.body}".strip()
             if supersede_with:
                 successor = self.find(supersede_with)
                 if successor is None:
@@ -389,6 +390,14 @@ class Store:
             if valid_from is not None:
                 current.valid_from = valid_from
             current.updated = now
+            changed = f"{current.abstract}\n\n{current.body}".strip()
+            if changed != previous:
+                preimage = self.archive.append_provenance(
+                    current.name,
+                    f"preimage before correction on {now}:\n\n{previous}",
+                    source="preimage",
+                )
+                current.provenance.append(str(preimage.relative_to(self.root)))
             return self._write_locked(
                 current, replace_links=links is not None, provenance=provenance
             )

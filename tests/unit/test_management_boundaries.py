@@ -108,3 +108,30 @@ def test_supersede_rejects_a_stale_keeper(store):
     with pytest.raises(ValidationError, match="changed"):
         store.supersede("base-fact", "base-copy", expected_successor_hash=keeper.source_hash)
     assert store.find("base-fact").is_active()
+
+
+def test_correct_archives_preimage_before_overwriting(store):
+    store.record(
+        abstract="Old wording",
+        type="fact",
+        name="wording",
+        body="Old body.",
+    )
+
+    store.correct("wording", abstract="New wording", body="New body.")
+
+    current = store.find("wording")
+    assert current.abstract == "New wording"
+    preimages = list((store.root / "archive" / "provenance" / "wording").glob("*.md"))
+    assert len(preimages) == 1
+    assert "Old wording" in preimages[0].read_text(encoding="utf-8")
+    assert "Old body." in preimages[0].read_text(encoding="utf-8")
+    assert any(str(path.relative_to(store.root)) in current.provenance for path in preimages)
+
+
+def test_correct_without_content_change_writes_no_preimage(store):
+    store.record(abstract="Same", type="fact", name="same", body="Body.")
+
+    store.correct("same", valid_from="2026-02-01")
+
+    assert list((store.root / "archive" / "provenance" / "same").glob("*.md")) == []
