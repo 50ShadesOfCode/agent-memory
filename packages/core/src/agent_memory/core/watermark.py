@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import pathlib
+import tempfile
 
 from .clock import Clock
+from .errors import FieldError, ValidationError
+from .locking import store_lock
 from .paths import StoreLayout
 
 MARK_SUFFIX = ".json"
@@ -41,51 +45,67 @@ class Watermark:
         path = self._path(session)
         if not path.exists():
             return Mark(session=session, consumed=0, updated_at="", source="")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return Mark(
-            session=session,
-            consumed=int(payload.get(KEY_CONSUMED, 0)),
-            updated_at=str(payload.get(KEY_UPDATED_AT, "")),
-            source=str(payload.get(KEY_SOURCE, "")),
-            distilled=int(payload.get(KEY_DISTILLED, 0)),
-        )
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise ValidationError(
+                [FieldError("watermark", f"{path.name} is unreadable: {error}")]
+            ) from error
+        try:
+            return Mark(
+                session=session,
+                consumed=int(payload.get(KEY_CONSUMED, 0)),
+                updated_at=str(payload.get(KEY_UPDATED_AT, "")),
+                source=str(payload.get(KEY_SOURCE, "")),
+                distilled=int(payload.get(KEY_DISTILLED, 0)),
+            )
+        except (AttributeError, TypeError, ValueError) as error:
+            raise ValidationError(
+                [FieldError("watermark", f"{path.name} holds no mark: {error}")]
+            ) from error
 
     def increment(self, session: str, items: list[str]) -> list[str]:
         return items[self.read(session).consumed :]
 
     def advance(self, session: str, consumed: int, source: str = "") -> Mark:
-        current = self.read(session)
-        return self._write(
-            dataclasses.replace(
-                current,
-                consumed=max(current.consumed, consumed),
-                updated_at=self._clock.now().isoformat(),
-                source=source or current.source,
+        with store_lock(self._layout):
+            current = self.read(session)
+            return self._write(
+                dataclasses.replace(
+                    current,
+                    consumed=max(current.consumed, consumed),
+                    updated_at=self._clock.now().isoformat(),
+                    source=source or current.source,
+                )
             )
-        )
 
     def settle(self, session: str, distilled: int) -> Mark:
         """Distillation caught up to a message index; the archive mark stays where it is."""
-        current = self.read(session)
-        return self._write(
-            dataclasses.replace(current, distilled=max(current.distilled, distilled))
-        )
+        with store_lock(self._layout):
+            current = self.read(session)
+            return self._write(
+                dataclasses.replace(current, distilled=max(current.distilled, distilled))
+            )
 
     def _write(self, mark: Mark) -> Mark:
         session = mark.session
         path = self._path(session)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                {
-                    KEY_CONSUMED: mark.consumed,
-                    KEY_UPDATED_AT: mark.updated_at,
-                    KEY_SOURCE: mark.source,
-                    KEY_DISTILLED: mark.distilled,
-                }
-            ),
-            encoding="utf-8",
-        )
+        payload = json.dumps(
+            {
+                KEY_CONSUMED: mark.consumed,
+                KEY_UPDATED_AT: mark.updated_at,
+                KEY_SOURCE: mark.source,
+                KEY_DISTILLED: mark.distilled,
+            }
+        ).encode("utf-8")
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+            temporary.write(payload)
+            staged = pathlib.Path(temporary.name)
+        try:
+            os.replace(staged, path)
+        finally:
+            staged.unlink(missing_ok=True)
         return mark
 
     def sessions(self) -> list[str]:

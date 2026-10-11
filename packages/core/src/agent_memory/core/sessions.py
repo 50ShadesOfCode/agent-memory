@@ -14,6 +14,7 @@ import re
 
 from .clock import Clock
 from .errors import FieldError, NotFoundError, ValidationError
+from .locking import store_lock
 from .paths import ARCHIVE_DIRNAME, SESSIONS_DIRNAME, StoreLayout
 
 SESSION_SUFFIX = ".jsonl"
@@ -114,17 +115,20 @@ def append(
 ) -> Pointer:
     path = session_path(layout, session)
     path.parent.mkdir(parents=True, exist_ok=True)
-    start = count(path)
-    stamp = clock.timestamp()
-    lines: list[str] = []
-    for offset, item in enumerate(items):
-        message = dataclasses.replace(_coerce(item, start + offset, stamp), index=start + offset)
-        lines.append(json.dumps(message.as_dict(), ensure_ascii=False))
-    if not lines:
-        return Pointer(session, start, max(start - 1, 0))
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write("\n".join(lines) + "\n")
-    return Pointer(session, start, start + len(lines) - 1)
+    with store_lock(layout):
+        start = count(path)
+        stamp = clock.timestamp()
+        lines: list[str] = []
+        for offset, item in enumerate(items):
+            message = dataclasses.replace(
+                _coerce(item, start + offset, stamp), index=start + offset
+            )
+            lines.append(json.dumps(message.as_dict(), ensure_ascii=False))
+        if not lines:
+            return Pointer(session, start, max(start - 1, 0))
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        return Pointer(session, start, start + len(lines) - 1)
 
 
 def count(path: pathlib.Path) -> int:
