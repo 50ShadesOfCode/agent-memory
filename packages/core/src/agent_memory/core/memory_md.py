@@ -1,4 +1,8 @@
-"""The always-injected root index. A hard budget, enforced by dropping the lightest lines."""
+"""The always-injected root index. A hard budget, enforced by dropping the lightest lines.
+
+Injection is query-independent by design: it carries stable high-weight residents, never
+query-sensitive picks. Light-but-relevant entries stay reachable through recall and context,
+which rank by relevance as well as weight; the two tracks divide labor instead of agreeing."""
 
 from __future__ import annotations
 

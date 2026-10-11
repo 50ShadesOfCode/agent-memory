@@ -232,3 +232,18 @@ def test_recall_serializes_access_log_append(seeded, monkeypatch):
     assert Recall(seeded).recall("single source of truth")
 
     assert held
+
+
+def test_injection_and_recall_divide_labor_by_design(seeded, clock):
+    from agent_memory.core import memory_md
+    from agent_memory.core.manage import Manage
+
+    for _ in range(3):
+        clock.advance(days=seeded.config.weight.decay_after_days + 1)
+        Manage(seeded).sleep()
+    assert seeded.find("file-truth-invariant").weight < seeded.config.recall.memory_md_weight_floor
+
+    assert "file-truth-invariant" not in memory_md.render(seeded.records(), seeded.config)
+    assert "file-truth-invariant" in [
+        hit.name for hit in Recall(seeded).recall("single source of truth")
+    ]
