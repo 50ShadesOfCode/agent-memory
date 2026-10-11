@@ -1,9 +1,5 @@
 # Follow-ups
 
-## Read policy follow-up
-
-- Evaluate the memory-first reading policy with observed exposure before attributing
-  answer changes to bounded Trace or optional Vector candidates.
 
 ## Executor follow-ups
 
