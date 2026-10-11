@@ -22,6 +22,7 @@ METHOD_LIST = "tools/list"
 METHOD_CALL = "tools/call"
 ERROR_METHOD_NOT_FOUND = -32601
 ERROR_INVALID_PARAMS = -32602
+ERROR_INTERNAL = -32603
 
 
 def handle(store: Store, request: object) -> dict[str, object] | None:
@@ -42,6 +43,8 @@ def handle(store: Store, request: object) -> dict[str, object] | None:
         return _error(request_id, ERROR_INVALID_PARAMS, error.as_dict())
     except KeyError:
         return _error(request_id, ERROR_METHOD_NOT_FOUND, {"method": method})
+    except Exception as error:
+        return _error(request_id, ERROR_INTERNAL, {"message": f"{type(error).__name__}"})
     return {"jsonrpc": JSONRPC, "id": request_id, "result": result}
 
 
