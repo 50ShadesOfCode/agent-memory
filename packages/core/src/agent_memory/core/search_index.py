@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 import re
 import sqlite3
 
@@ -13,6 +14,19 @@ from .record import MemoryRecord
 _TOKENS = re.compile(r"\w+", re.UNICODE)
 LINK_SEPARATOR = ","
 SURFACES = (SURFACE_ACTIVE, SURFACE_HISTORY)
+
+
+def normalize_scope(scope: str | None) -> str | None:
+    """One scope spelling for the SQL prefilter and the postfilter.
+
+    Upward navigation never names memories, so it normalizes to nothing
+    instead of meaning different things in the two layers."""
+    if not scope:
+        return None
+    parts = pathlib.PurePath(scope.strip("/\\")).parts
+    if not parts or ".." in parts:
+        return ""
+    return "/".join(parts)
 
 
 @dataclasses.dataclass(frozen=True)

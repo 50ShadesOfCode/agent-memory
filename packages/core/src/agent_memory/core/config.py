@@ -91,6 +91,8 @@ class RecallConfig:
     injection_budget_bytes: int = 8192
     anchor_context_chars: int = 160
     snippet_max_chars: int = 400
+    rrf_k: int = 60
+    rrf_source_count: int = 2
 
 
 @dataclasses.dataclass

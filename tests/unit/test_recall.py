@@ -2,6 +2,7 @@
 
 import hashlib
 
+import pytest
 from agent_memory.core.access_log import AccessLog
 from agent_memory.core.database import Database
 from agent_memory.core.manage import Manage
@@ -247,3 +248,27 @@ def test_injection_and_recall_divide_labor_by_design(seeded, clock):
     assert "file-truth-invariant" in [
         hit.name for hit in Recall(seeded).recall("single source of truth")
     ]
+
+
+@pytest.mark.parametrize("scope", [".", "..", "../.."])
+def test_adversarial_scopes_agree_and_leak_nothing(seeded, scope):
+    from agent_memory.core.search_index import normalize_scope
+
+    assert Recall(seeded).recall("drain queue", scope=scope) == []
+    assert normalize_scope(scope) in (None, "")
+
+
+def test_backslash_inside_scope_matches_nothing(seeded):
+    assert Recall(seeded).recall("drain queue", scope="exper\\ience") == []
+
+
+@pytest.mark.parametrize("scope", ["experience", "experience/", "experience//"])
+def test_equivalent_scopes_return_the_same_hits(seeded, scope):
+    plain = [hit.name for hit in Recall(seeded).recall("drain queue", scope="experience")]
+
+    assert plain
+    assert [hit.name for hit in Recall(seeded).recall("drain queue", scope=scope)] == plain
+
+
+def test_empty_scope_means_unscoped(seeded):
+    assert Recall(seeded).recall("drain queue", scope="") != []

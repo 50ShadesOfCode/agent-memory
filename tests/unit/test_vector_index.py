@@ -54,12 +54,12 @@ def _candidate(name, relevance=1.0, kind="body", anchor="", heading=""):
 def test_rrf_keeps_both_sources_boosts_overlap_deduplicates_and_is_deterministic():
     lexical = [_candidate("both"), _candidate("lexical"), _candidate("both")]
     dense = [_candidate("both"), _candidate("dense")]
-    first = fuse_candidates(lexical, dense, 10)
-    second = fuse_candidates(lexical, dense, 10)
+    first = fuse_candidates(lexical, dense, 10, 60, 2)
+    second = fuse_candidates(lexical, dense, 10, 60, 2)
     assert first == second
     assert [item.name for item in first] == ["both", "dense", "lexical"]
     assert first[0].relevance > first[1].relevance
-    assert len(fuse_candidates(lexical, dense, 2)) == 2
+    assert len(fuse_candidates(lexical, dense, 2, 60, 2)) == 2
 
 
 def test_vector_only_semantic_candidate_enters_recall(tmp_path, clock):

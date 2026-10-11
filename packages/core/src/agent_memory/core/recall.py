@@ -16,15 +16,14 @@ from .access_log import KIND_RECALL, AccessEntry, AccessLog
 from .config import Config
 from .database import SURFACE_ACTIVE, SURFACE_HISTORY, Database
 from .locking import store_lock
-from .search_index import LINK_SEPARATOR, Candidate, SearchIndex
+from .search_index import LINK_SEPARATOR, Candidate, SearchIndex, normalize_scope
 from .store import Store
 from .vector_index import VectorIndex
 
-RRF_K = 60
-RRF_SOURCE_COUNT = 2
 
-
-def fuse_candidates(lexical: list[Candidate], dense: list[Candidate], pool: int) -> list[Candidate]:
+def fuse_candidates(
+    lexical: list[Candidate], dense: list[Candidate], pool: int, k: int, sources: int
+) -> list[Candidate]:
     """Reciprocal-rank fusion by chunk identity, normalized to a stable 0..1 scale."""
 
     def identity(item: Candidate) -> tuple[str, str, str, str]:
@@ -40,8 +39,8 @@ def fuse_candidates(lexical: list[Candidate], dense: list[Candidate], pool: int)
                 continue
             seen.add(key)
             exemplars.setdefault(key, candidate)
-            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
-    maximum = RRF_SOURCE_COUNT / (RRF_K + 1)
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+    maximum = sources / (k + 1)
     fused = [
         dataclasses.replace(exemplars[key], relevance=score / maximum)
         for key, score in scores.items()
@@ -93,9 +92,7 @@ class Recall:
         if limit < 1:
             raise ValueError("limit must be positive")
         pool = limit * self._config.recall.candidate_pool_multiplier
-        scope_path = (
-            "/".join(pathlib.PurePath(scope.strip("/\\")).parts) if scope else None
-        )
+        scope_path = normalize_scope(scope)
         with self._database.connect() as connection:
             index = SearchIndex(connection)
             candidates = index.match(query, pool, SURFACE_ACTIVE, scope_path=scope_path)
@@ -110,7 +107,13 @@ class Recall:
                     connection, self._store.embedder, self._config.index.vector_model
                 ).match(query, pool, eligible_names=set(eligible))
                 if dense:
-                    candidates = fuse_candidates(candidates, dense, pool)
+                    candidates = fuse_candidates(
+                        candidates,
+                        dense,
+                        pool,
+                        self._config.recall.rrf_k,
+                        self._config.recall.rrf_source_count,
+                    )
             hits = self._rank(candidates, eligible, as_of=as_of)
             hits = hits[:limit]
             if not log:
@@ -155,9 +158,11 @@ class Recall:
         return eligible
 
     def _in_scope(self, path: str, scope: str) -> bool:
-        path_parts = pathlib.PurePath(path).parts
-        scope_parts = pathlib.PurePath(scope.strip("/\\")).parts
-        return bool(scope_parts) and path_parts[: len(scope_parts)] == scope_parts
+        normalized = normalize_scope(scope)
+        if not normalized:
+            return False
+        scope_parts = pathlib.PurePath(normalized).parts
+        return pathlib.PurePath(path).parts[: len(scope_parts)] == scope_parts
 
     def _current_at(self, row: sqlite3.Row, moment: dt.datetime) -> bool:
         if timestamp.parse(str(row["valid_from"])) > moment:
