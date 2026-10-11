@@ -605,7 +605,7 @@ class Store:
         return report
 
     def _log_access(self, entries: list[AccessEntry]) -> None:
-        with self._database.connect() as connection:
+        with store_lock(self.layout), self._database.connect() as connection:
             AccessLog(connection).append(entries)
 
     def _at(self, path: pathlib.Path | None) -> MemoryRecord | None:

@@ -209,3 +209,24 @@ def test_the_recall_list_length_is_a_knob(seeded):
     wide = Recall(seeded).recall("evening habits reading tea")
     assert len(wide) > len(narrow)
     assert {hit.name for hit in narrow} <= {hit.name for hit in wide}
+
+
+def test_recall_serializes_access_log_append(seeded, monkeypatch):
+    import contextlib
+
+    import agent_memory.core.recall as recall_module
+
+    held = []
+    real = recall_module.store_lock
+
+    @contextlib.contextmanager
+    def recording(layout):
+        held.append(True)
+        with real(layout):
+            yield
+
+    monkeypatch.setattr(recall_module, "store_lock", recording)
+
+    assert Recall(seeded).recall("single source of truth")
+
+    assert held

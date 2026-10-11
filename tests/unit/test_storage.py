@@ -206,3 +206,24 @@ def test_find_rejects_a_parseable_but_invalid_file_loudly(store):
     with pytest.raises(ValidationError, match="slug"):
         store.find("Not A Slug")
     assert "Not A Slug" not in [record.name for record in store.records()]
+
+
+def test_read_serializes_access_log_append(seeded, monkeypatch):
+    import contextlib
+
+    import agent_memory.core.store as store_module
+
+    held = []
+    real = store_module.store_lock
+
+    @contextlib.contextmanager
+    def recording(layout):
+        held.append(True)
+        with real(layout):
+            yield
+
+    monkeypatch.setattr(store_module, "store_lock", recording)
+
+    seeded.read("file-truth-invariant", level="abstract")
+
+    assert held == [True]
