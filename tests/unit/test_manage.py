@@ -64,8 +64,10 @@ def test_decay_is_reversible_by_an_explicit_boost(seeded, clock):
     clock.advance(days=seeded.config.weight.decay_after_days * 2)
     Manage(seeded).sleep()
     decayed = seeded.find("file-truth-invariant").weight
-    restored = seeded.feedback("file-truth-invariant", seeded.config.weight.boost_step)
-    assert restored.weight > decayed
+    clock.advance(seconds=1)
+    seeded.feedback("file-truth-invariant", seeded.config.weight.boost_step)
+    Manage(seeded).sleep()
+    assert seeded.find("file-truth-invariant").weight > decayed
 
 
 def test_exact_duplicates_are_merged_by_supersede_not_by_deletion(seeded):
@@ -593,3 +595,32 @@ def test_a_group_sharing_too_few_tokens_is_not_a_topic(seeded):
         "Kubernetes control plane upgrade note {index}",
     )
     assert ACTION_CLUSTERED not in _kinds(Manage(seeded).sleep())
+
+
+def test_feedback_records_signal_without_touching_truth(seeded):
+    import hashlib
+
+    before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in seeded.layout.truth_files()}
+    weight = seeded.find("file-truth-invariant").weight
+
+    seeded.feedback("file-truth-invariant", seeded.config.weight.boost_step)
+
+    after = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in seeded.layout.truth_files()}
+    assert after == before
+    assert seeded.find("file-truth-invariant").weight == weight
+
+
+def test_feedback_settles_once_on_sleep_not_twice(seeded):
+    step = seeded.config.weight.boost_step
+    before = seeded.find("file-truth-invariant").weight
+
+    seeded.feedback("file-truth-invariant", step)
+    Manage(seeded).sleep()
+    Manage(seeded).sleep()
+
+    assert seeded.find("file-truth-invariant").weight == pytest.approx(before + step)
+
+
+def test_feedback_for_unknown_memory_still_fails_loudly(seeded):
+    with pytest.raises(NotFoundError, match="no memory named"):
+        seeded.feedback("no-such-memory", seeded.config.weight.boost_step)

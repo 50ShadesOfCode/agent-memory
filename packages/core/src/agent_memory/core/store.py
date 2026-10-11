@@ -15,7 +15,7 @@ import tempfile
 from . import chunking, memory_md, observation, placement, timestamp
 from . import record as record_module
 from . import trace as trace_module
-from .access_log import KIND_READ, AccessEntry, AccessLog
+from .access_log import KIND_BOOST, KIND_PENALTY, KIND_READ, AccessEntry, AccessLog
 from .archive import Archive
 from .clock import Clock
 from .config import Config, resolve_store_root
@@ -540,14 +540,18 @@ class Store:
                 )
 
     def feedback(self, name: str, delta: float) -> MemoryRecord:
-        with store_lock(self.layout):
-            current = self.find(name)
-            if current is None or current.path is None:
-                raise NotFoundError(f"no memory named {name}")
-            current.weight = min(
-                self.config.weight.ceiling, max(self.config.weight.floor, current.weight + delta)
+        current = self.find(name)
+        if current is None or current.path is None:
+            raise NotFoundError(f"no memory named {name}")
+        if delta > 0:
+            self._log_access(
+                [AccessEntry(self.clock.now().isoformat(), name, "", KIND_BOOST, self.agent)]
             )
-            return self._write_locked(current)
+        elif delta < 0:
+            self._log_access(
+                [AccessEntry(self.clock.now().isoformat(), name, "", KIND_PENALTY, self.agent)]
+            )
+        return current
 
     def read(self, name: str, level: str = LEVEL_FULL) -> ReadResult:
         if level not in LEVELS:

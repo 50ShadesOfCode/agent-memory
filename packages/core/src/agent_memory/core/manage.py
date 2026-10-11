@@ -20,7 +20,7 @@ import subprocess
 
 from . import reasoning, timestamp
 from . import record as record_module
-from .access_log import KIND_READ, AccessLog
+from .access_log import KIND_BOOST, KIND_PENALTY, KIND_READ, AccessLog
 from .clock import Clock
 from .database import Database
 from .errors import FieldError, MemoryStoreError, NotFoundError, ValidationError
@@ -130,11 +130,11 @@ class Manage:
 
     def sleep(self, reasoner: reasoning.Reasoner | None = None) -> DreamReport:
         records = self._store.records()
-        hits, reads, last_access = self._usage()
+        hits, reads, feedback, last_access = self._usage()
 
         actions: list[Action] = []
         actions.extend(self._normalise_dates(records))
-        actions.extend(self._settle_weights(records, reads, last_access))
+        actions.extend(self._settle_weights(records, reads, feedback, last_access))
         actions.extend(self._add_cooccurrence_links(records))
         actions.extend(self._merge_exact_duplicates(records))
         actions.extend(self._merge_near_duplicate_groups())
@@ -332,7 +332,7 @@ class Manage:
     def _ledger(self) -> DecisionLedger:
         return DecisionLedger(self._store.layout)
 
-    def _usage(self) -> tuple[dict[str, int], dict[str, int], dict[str, str]]:
+    def _usage(self) -> tuple[dict[str, int], dict[str, int], dict[str, int], dict[str, str]]:
         """Lifetime counts decide what was never useful; only new reads earn weight, so one
         read is settled once however many sleeps follow it."""
         since = self._last_sleep()
@@ -349,7 +349,23 @@ class Manage:
                 str(row["name"]): int(row["hits"])
                 for row in connection.execute(query + " GROUP BY name", parameters)
             }
-        return hits, reads, last_access
+            feedback_query = (
+                "SELECT name, kind, COUNT(*) AS hits FROM access_log "
+                "WHERE kind IN (?, ?)"
+            )
+            feedback_parameters: tuple[object, ...] = (KIND_BOOST, KIND_PENALTY)
+            if since is not None:
+                feedback_query += " AND at > ?"
+                feedback_parameters += (since.isoformat(),)
+            merged: dict[str, int] = {}
+            for row in connection.execute(
+                feedback_query + " GROUP BY name, kind", feedback_parameters
+            ):
+                sign = 1 if str(row["kind"]) == KIND_BOOST else -1
+                merged[str(row["name"])] = merged.get(str(row["name"]), 0) + sign * int(
+                    row["hits"]
+                )
+        return hits, reads, merged, last_access
 
     def _normalise_dates(self, records: list[MemoryRecord]) -> list[Action]:
         actions: list[Action] = []
@@ -369,7 +385,11 @@ class Manage:
         return actions
 
     def _settle_weights(
-        self, records: list[MemoryRecord], reads: dict[str, int], last_access: dict[str, str]
+        self,
+        records: list[MemoryRecord],
+        reads: dict[str, int],
+        feedback: dict[str, int],
+        last_access: dict[str, str],
     ) -> list[Action]:
         actions: list[Action] = []
         now = self._clock.now()
@@ -378,6 +398,7 @@ class Manage:
             after = before + self._config.weight.boost_step * min(
                 reads.get(record.name, 0), self._config.manage.max_boosts_per_sleep
             )
+            after += self._config.weight.boost_step * feedback.get(record.name, 0)
             if self._idle_days(record, last_access, now) >= self._config.weight.decay_after_days:
                 after -= self._config.weight.decay_step
             after = min(self._config.weight.ceiling, max(self._config.weight.floor, after))

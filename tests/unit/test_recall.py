@@ -4,6 +4,7 @@ import hashlib
 
 from agent_memory.core.access_log import AccessLog
 from agent_memory.core.database import Database
+from agent_memory.core.manage import Manage
 from agent_memory.core.recall import Recall
 from agent_memory.core.schema import MemorySchema, render
 from agent_memory.core.store import LEVEL_ABSTRACT, LEVEL_OUTLINE, Store
@@ -155,6 +156,7 @@ def test_weight_reorders_two_otherwise_comparable_hits(seeded):
     baseline = _names(Recall(seeded).recall("deploy notes drain window"))
     before = seeded.find("drain-notes-b").weight
     seeded.feedback("drain-notes-b", seeded.config.weight.boost_step)
+    Manage(seeded).sleep()
     reopened = Store(seeded.root, config=seeded.config, clock=seeded.clock)
     boosted = _names(Recall(reopened).recall("deploy notes drain window"))
     assert baseline.index("drain-notes-a") < baseline.index("drain-notes-b")

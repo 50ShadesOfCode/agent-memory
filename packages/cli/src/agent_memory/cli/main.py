@@ -176,7 +176,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     migrator.set_defaults(handler=_migrate)
 
-    voter = subparsers.add_parser("feedback", help="explicit boost or penalty")
+    voter = subparsers.add_parser(
+        "feedback", help="explicit boost or penalty, settled by Manage on the next sleep"
+    )
     voter.add_argument("name")
     voter.add_argument("--boost", action="store_true")
     voter.add_argument("--penalize", action="store_true")

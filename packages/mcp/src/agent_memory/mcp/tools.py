@@ -110,7 +110,9 @@ DESCRIPTIONS = {
     TOOL_DELETE: "End a named memory's validity while retaining historical evidence.",
     TOOL_TRACE: "Read only the archived messages cited by a named memory.",
     TOOL_MERGE: "Combine named active memories atomically and retain their history.",
-    TOOL_FEEDBACK: "Raise or lower a memory's weight explicitly.",
+    TOOL_FEEDBACK: (
+        "Raise or lower a memory's weight explicitly. Settled by Manage on the next sleep."
+    ),
 }
 
 

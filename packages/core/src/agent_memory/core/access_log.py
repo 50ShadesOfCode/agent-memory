@@ -8,6 +8,8 @@ import sqlite3
 
 KIND_RECALL = "recall"
 KIND_READ = "read"
+KIND_BOOST = "boost"
+KIND_PENALTY = "penalty"
 
 
 @dataclasses.dataclass(frozen=True)
