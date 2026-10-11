@@ -12,7 +12,7 @@ import os
 import pathlib
 import tempfile
 
-from . import chunking, memory_md, observation, placement, timestamp
+from . import chunking, memory_md, observation, placement, slug, timestamp
 from . import record as record_module
 from . import trace as trace_module
 from .access_log import KIND_BOOST, KIND_PENALTY, KIND_READ, AccessEntry, AccessLog
@@ -412,6 +412,55 @@ class Store:
         return self.correct(
             old, supersede_with=new, expected_successor_hash=expected_successor_hash
         )
+
+    def move(self, name: str, group_field: str, group: str) -> MemoryRecord:
+        """Relocate one memory to another group directory.
+
+        Identity, body and evidence travel intact: unlike a re-record, a move never
+        renames the file, so links and provenance citations keep working.
+        """
+        with store_lock(self.layout):
+            current = self.find(name)
+            if current is None or current.path is None:
+                raise NotFoundError(f"no memory named {name}")
+            if not current.is_active():
+                raise ValidationError([FieldError("status", "move requires an active memory")])
+            schema = self.schemas.require(current.type)
+            if schema.group != group_field:
+                raise ValidationError(
+                    [FieldError(group_field, "is not this memory's group field")]
+                )
+            group = str(group).strip()
+            if not slug.is_valid_slug(group):
+                raise ValidationError([FieldError(group_field, "must be a kebab-case slug")])
+            target = self.layout.type_dir(current.type) / group / current.path.name
+            if target.exists():
+                raise ValidationError(
+                    [FieldError(group_field, f"{group} already holds {name}")]
+                )
+            previous = current.path.read_bytes()
+            source = current.path
+            current.fields[group_field] = group
+            current.updated = self.clock.timestamp()
+            record_module.validate(current, self.config, schema)
+            payload = current.to_text().encode("utf-8")
+            try:
+                self._replace_file(target, payload)
+                source.unlink()
+            except Exception:
+                target.unlink(missing_ok=True)
+                self._replace_file(source, previous)
+                raise
+            current.path = target
+            try:
+                self._project()
+            except Exception:
+                self._replace_file(source, previous)
+                target.unlink(missing_ok=True)
+                current.path = source
+                raise
+            current.source_hash = hashlib.sha256(payload).hexdigest()
+            return current
 
     def merge(
         self, names: list[str], abstract: str, body: str, name: str | None = None

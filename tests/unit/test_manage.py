@@ -624,3 +624,43 @@ def test_feedback_settles_once_on_sleep_not_twice(seeded):
 def test_feedback_for_unknown_memory_still_fails_loudly(seeded):
     with pytest.raises(NotFoundError, match="no memory named"):
         seeded.feedback("no-such-memory", seeded.config.weight.boost_step)
+
+
+def test_group_merge_preserves_identity_on_add_only_schemas(store):
+    from agent_memory.core import schema as schema_module
+    from agent_memory.core.manage import ACTION_GROUP_MERGED, Manage
+
+    item = schema_module.MemorySchema(
+        type="widget",
+        description="A widget",
+        key=("topic", "subject"),
+        group="topic",
+        mode="add_only",
+    )
+    store.schemas.path_for("widget").write_text(schema_module.render(item), encoding="utf-8")
+    store.record(
+        type="widget",
+        fields={"topic": "apple", "subject": "s1"},
+        abstract="Apple widget one",
+        name="apple-one",
+        create_group=True,
+    )
+    store.record(
+        type="widget",
+        fields={"topic": "apples", "subject": "s2"},
+        abstract="Apple widget two",
+        name="apple-two",
+        create_group=True,
+    )
+
+    report = Manage(store).sleep()
+    merged = [action for action in report.actions if action.kind == ACTION_GROUP_MERGED]
+
+    assert {action.target for action in merged} == {"apple-one"}
+    assert store.layout.groups_of("widget") == {"apples"}
+    assert store.find("apple-one").fields["topic"] == "apples"
+    assert store.find("apple-one").abstract == "Apple widget one"
+    assert sorted(path.name for path in (store.root / "widget").rglob("*.md")) == [
+        "apple-one.md",
+        "apple-two.md",
+    ]

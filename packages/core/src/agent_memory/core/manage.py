@@ -540,19 +540,8 @@ class Manage:
                     folder.rmdir()
 
     def _move(self, record: MemoryRecord, group_field: str, group: str) -> MemoryRecord:
-        """A move is a write with one field changed; name, body and evidence travel intact."""
-        return self._store.record(
-            type=record.type,
-            name=record.name,
-            fields={**record.fields, group_field: group},
-            abstract=record.abstract,
-            body=record.body,
-            links=list(record.links),
-            weight=record.weight,
-            valid_from=record.valid_from,
-            author=record.author,
-            create_group=True,
-        )
+        """A move is a relocation with one field changed; name, body and evidence travel intact."""
+        return self._store.move(record.name, group_field, group)
 
     def _group_size(self, type_name: str, group: str) -> int:
         folder = self._store.layout.type_dir(type_name) / group

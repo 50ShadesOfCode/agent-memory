@@ -227,3 +227,46 @@ def test_read_serializes_access_log_append(seeded, monkeypatch):
     seeded.read("file-truth-invariant", level="abstract")
 
     assert held == [True]
+
+
+def test_move_preserves_identity_provenance_and_links(store):
+    from agent_memory.core import schema as schema_module
+
+    item = schema_module.MemorySchema(
+        type="widget",
+        description="A widget",
+        key=("topic", "subject"),
+        group="topic",
+        mode="add_only",
+    )
+    store.schemas.path_for("widget").write_text(schema_module.render(item), encoding="utf-8")
+    pointer = store.archive.append_session("chat", ["user: the widget hums"])
+    from agent_memory.core.sessions import render_pointer
+
+    assert pointer is not None
+    store.record(
+        abstract="Base note", type="fact", name="base-note", body="See the widget."
+    )
+    rec = store.record(
+        type="widget",
+        fields={"topic": "apple", "subject": "hum"},
+        abstract="The widget hums",
+        body="It hums.",
+        links=["base-note"],
+        provenance=[render_pointer(pointer)],
+        name="widget-hum",
+        create_group=True,
+    )
+    old_path = rec.path
+
+    moved = store.move("widget-hum", "topic", "apples")
+
+    assert moved.name == "widget-hum"
+    assert moved.fields["topic"] == "apples"
+    assert moved.abstract == rec.abstract and moved.body == rec.body
+    assert moved.provenance == rec.provenance
+    assert moved.links == ["base-note"]
+    assert store.find("base-note") is not None
+    assert old_path is not None and not old_path.exists()
+    assert moved.path is not None and moved.path.is_file()
+    assert store.find("widget-hum").fields["topic"] == "apples"
