@@ -16,7 +16,6 @@
   including stores outside Git and multi-file Manage failures.
 - Decide whether direct link/unlink delta commands, relation audit history and per-operation
   bounds are needed; current correct replaces the complete list.
-- Review recovery of interrupted multi-file operations outside Git-backed stores.
 
 ## Executor follow-ups
 
