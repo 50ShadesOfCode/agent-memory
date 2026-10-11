@@ -14,7 +14,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
-import re
 import shutil
 import urllib.error
 import urllib.request
@@ -23,7 +22,7 @@ from agent_memory.core.config import EXECUTOR_ENV_VAR, MUSE_LAUNCHER_ENV_VAR
 from agent_memory.core.errors import ReasonerUnavailableError
 
 from .credentials import API_KEY_ENV, BASE_URL_ENV, VertexCredentials
-from .hosts import BINARIES, HOST_CLAUDE_CODE, HOST_MUSE_CODE, Host, HostSpec
+from .hosts import BINARIES, HOST_CLAUDE_CODE, HOST_MUSE_CODE, Host, HostSpec, _safe_detail
 
 CHAT_COMPLETIONS = "/chat/completions"
 DEFAULT_ENDPOINT_MODEL = "google/gemini-2.5-flash"
@@ -31,13 +30,6 @@ DEFAULT_TIMEOUT_SECONDS = 120.0
 ROLE_USER = "user"
 EMPTY = ""
 CLAUDE_BUNDLED_ENV = "CLAUDE_CODE_EXECPATH"
-SECRET_PATTERNS = (
-    re.compile(r"sk-or-[A-Za-z0-9_-]+"),
-    re.compile(r"(?i)(bearer\s+)[^\s\"']+"),
-    re.compile(r'(?i)(api[_-]?key["\']?\s*[:=]\s*["\']?)[^\s,}\"\']+'),
-)
-
-
 @dataclasses.dataclass
 class HostReasoner:
     """The consuming agent's own CLI, run headless for one turn."""
@@ -133,12 +125,3 @@ def _first_message(payload: object) -> str:
     return content if isinstance(content, str) else EMPTY
 
 
-def _safe_detail(detail: str) -> str:
-    safe = detail.strip()
-    for pattern in SECRET_PATTERNS:
-        safe = pattern.sub(_replacement, safe)
-    return safe
-
-
-def _replacement(match: re.Match[str]) -> str:
-    return f"{match.group(1)}[REDACTED]" if match.groups() else "[REDACTED]"

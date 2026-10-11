@@ -336,3 +336,18 @@ def test_memory_index_marks_lines_as_data_not_instructions(seeded):
     assert seeded.layout.memory_index.read_bytes().startswith(
         injection.payload(seeded).encode("utf-8")
     )
+
+
+def test_hook_stays_exit_zero_when_signals_are_unsupported(store, monkeypatch, capsys):
+    import signal
+
+    from agent_memory.adapters import hook_entry
+
+    def _unsupported(*args):
+        raise ValueError("main thread only")
+
+    monkeypatch.setattr(signal, "signal", _unsupported)
+    monkeypatch.setattr(signal, "setitimer", _unsupported)
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(_stop_event(store))))
+
+    assert hook_entry.main() == hook_entry.EXIT_OK

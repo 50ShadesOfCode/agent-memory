@@ -188,3 +188,26 @@ def test_the_shipped_defaults_are_all_affordable(monkeypatch):
     _affordable(JUDGE_MODEL, "judge")
     for name, (_, model) in BINARIES.items():
         _affordable(model, name)
+
+
+def test_host_errors_redact_secrets(tmp_path, monkeypatch):
+    import subprocess
+
+    from agent_memory.executor.hosts import Host
+
+    def _leak(*args, **kwargs):
+        return type(
+            "Completed",
+            (),
+            {"returncode": 1, "stdout": "", "stderr": "key sk-or-SECRET-123"},
+        )()
+
+    monkeypatch.setattr(subprocess, "run", _leak)
+    spec = hosts.HostSpec(
+        name="opencode", binary="opencode", model="m", attempts=1, retry_backoff_seconds=0
+    )
+
+    result = Host(spec).run("hi", store_root=None)
+
+    assert not result.ok
+    assert "sk-or-SECRET-123" not in result.error

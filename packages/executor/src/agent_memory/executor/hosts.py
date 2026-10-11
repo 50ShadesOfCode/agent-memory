@@ -16,6 +16,7 @@ import dataclasses
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -26,6 +27,23 @@ from agent_memory.core.config import MUSE_SETTINGS_ENV_VAR
 from agent_memory.core.sessions import DISTILL_SESSION_TITLE
 
 from .credentials import VertexCredentials
+
+SECRET_PATTERNS = (
+    re.compile(r"sk-or-[A-Za-z0-9_-]+"),
+    re.compile(r"(?i)(bearer\s+)[^\s\"']+"),
+    re.compile(r'(?i)(api[_-]?key["\']?\s*[:=]\s*["\']?)[^\s,}\"\']+'),
+)
+
+
+def _replacement(match: re.Match[str]) -> str:
+    return f"{match.group(1)}[REDACTED]" if match.groups() else "[REDACTED]"
+
+
+def _safe_detail(detail: str) -> str:
+    safe = detail.strip()
+    for pattern in SECRET_PATTERNS:
+        safe = pattern.sub(_replacement, safe)
+    return safe
 
 HOST_CLAUDE_CODE = "claude-code"
 HOST_CODEX = "codex"
@@ -601,10 +619,12 @@ class Host:
                 return value.decode(errors="replace") if isinstance(value, bytes) else value or ""
 
             capture(state="timeout", stdout=decoded(error.stdout), stderr=decoded(error.stderr))
-            return HostResult("", False, time.monotonic() - started, "timeout")
+            return HostResult("", False, time.monotonic() - started, _safe_detail("timeout"))
         except OSError as error:
             capture(state="error", error_type=type(error).__name__)
-            return HostResult("", False, time.monotonic() - started, str(error))
+            return HostResult(
+                "", False, time.monotonic() - started, _safe_detail(str(error))
+            )
         elapsed = time.monotonic() - started
         capture(
             state="completed",
@@ -614,7 +634,9 @@ class Host:
         )
         if completed.returncode != 0:
             detail = (completed.stderr.strip() or completed.stdout.strip())[:ERROR_EXCERPT]
-            return HostResult("", False, elapsed, detail or "non-zero exit with no output")
+            return HostResult(
+                "", False, elapsed, _safe_detail(detail or "non-zero exit with no output")
+            )
         text = self.dialect.answer(completed.stdout, answer_file)
         if self.dialect.empty_label is not None and not text:
             return HostResult(

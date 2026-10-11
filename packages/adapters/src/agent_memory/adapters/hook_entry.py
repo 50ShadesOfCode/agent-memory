@@ -7,6 +7,7 @@ in exit code 0 and any trouble goes to the store's own log.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import pathlib
@@ -234,12 +235,14 @@ def _arm(seconds: float) -> None:
     def _raise(signum: int, frame: FrameType | None) -> None:
         raise _Timeout()
 
-    signal.signal(signal.SIGALRM, _raise)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
+    with contextlib.suppress(ValueError, OSError, RuntimeError):
+        signal.signal(signal.SIGALRM, _raise)
+        signal.setitimer(signal.ITIMER_REAL, seconds)
 
 
 def _disarm() -> None:
-    signal.setitimer(signal.ITIMER_REAL, 0)
+    with contextlib.suppress(ValueError, OSError, RuntimeError):
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def _log(store: Store | None, message: str) -> None:
