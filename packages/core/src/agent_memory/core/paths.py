@@ -16,6 +16,7 @@ STATE_DIRNAME = ".state"
 INDEX_DB_FILENAME = "index.db"
 LOCK_FILENAME = "store.lock"
 MEMORY_SUFFIX = ".md"
+STAGED_PREFIX = ".staged-"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -101,6 +102,15 @@ class StoreLayout:
             path.mkdir(parents=True, exist_ok=True)
         if not self.memory_index.exists():
             self.memory_index.write_text(self.config.memory_md.header + "\n\n", encoding="utf-8")
+        self._reap_staged_leftovers()
+
+    def _reap_staged_leftovers(self) -> None:
+        """Staged writes that died with their process are invisible but occupy disk."""
+        index = self.index_dir.resolve()
+        for path in self.root.rglob(STAGED_PREFIX + "*"):
+            if not path.is_file() or index in path.resolve().parents:
+                continue
+            path.unlink(missing_ok=True)
 
     def type_of(self, path: pathlib.Path) -> str | None:
         try:

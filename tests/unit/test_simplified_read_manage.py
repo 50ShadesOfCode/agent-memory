@@ -155,3 +155,45 @@ def test_legacy_raw_config_knobs_load_as_ignored_compatibility(store):
     ))
     reopened = Store(store.root)
     assert reopened.config.recall.default_limit == store.config.recall.default_limit
+
+
+def test_interrupted_merge_resumes_instead_of_failing_forever(store, monkeypatch):
+    import agent_memory.core.record as record_module
+
+    store.record(type="fact", name="first", abstract="First plan")
+    store.record(type="fact", name="second", abstract="Second plan")
+    calls = 0
+    original = record_module.invalidate
+
+    def die_once(record, *args):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("killed mid-merge")
+        return original(record, *args)
+
+    monkeypatch.setattr(record_module, "invalidate", die_once)
+    monkeypatch.setattr(store, "_restore_files", lambda snapshots: None)
+    with pytest.raises(RuntimeError, match="killed mid-merge"):
+        store.merge(["first", "second"], "Combined plan", "Combined body", name="combined")
+
+    result = store.merge(["first", "second"], "Combined plan", "Combined body", name="combined")
+
+    assert result.name == "combined"
+    assert result.abstract == "Combined plan"
+    assert not store.find("first").is_active()
+    assert not store.find("second").is_active()
+    assert store.find("combined").is_active()
+
+
+def test_merge_refuses_a_target_with_different_content(store):
+    from agent_memory.core.errors import ValidationError
+
+    store.record(type="fact", name="first", abstract="First plan")
+    store.record(type="fact", name="second", abstract="Second plan")
+    store.record(type="fact", name="combined", abstract="Something else entirely")
+
+    with pytest.raises(ValidationError, match="already exists"):
+        store.merge(["first", "second"], "Combined plan", "Combined body", name="combined")
+    assert store.find("first").is_active()
+    assert store.find("second").is_active()

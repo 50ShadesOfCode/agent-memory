@@ -24,7 +24,7 @@ from .embeddings import Embedder, create_embedder
 from .errors import FieldError, NotFoundError, ValidationError
 from .indexer import Indexer, IndexReport
 from .locking import store_lock
-from .paths import StoreLayout
+from .paths import STAGED_PREFIX, StoreLayout
 from .record import MemoryRecord
 from .schema import MODE_ADD_ONLY, MemorySchema, SchemaRegistry
 from .search_index import SearchIndex
@@ -477,29 +477,38 @@ class Store:
                 raise ValidationError([FieldError("type", "merge sources must share a type")])
             keeper = active[0]
             target_name = name or f"{keeper.name}-merged"
-            if self.find(target_name) is not None:
-                raise ValidationError([FieldError("name", "merge target already exists")])
             links = sorted({link for source in active for link in source.links} - set(names))
             snapshots: dict[pathlib.Path, bytes | None] = {}
             try:
-                merged, changed = self._write_one({
-                    "name": target_name,
-                    "type": keeper.type,
-                    "fields": dict(keeper.fields),
-                    "abstract": abstract,
-                    "body": body,
-                    "links": links,
-                    "weight": max(source.weight for source in active),
-                    "create_group": True,
-                })
-                snapshots.update(changed)
-                merged.provenance = list(dict.fromkeys(
-                    pointer for source in active for pointer in source.provenance
-                ))
-                assert merged.path is not None
-                payload = merged.to_text().encode("utf-8")
-                self._replace_file(merged.path, payload)
-                merged.source_hash = hashlib.sha256(payload).hexdigest()
+                existing_target = self.find(target_name)
+                if existing_target is None:
+                    merged, changed = self._write_one({
+                        "name": target_name,
+                        "type": keeper.type,
+                        "fields": dict(keeper.fields),
+                        "abstract": abstract,
+                        "body": body,
+                        "links": links,
+                        "weight": max(source.weight for source in active),
+                        "create_group": True,
+                    })
+                    snapshots.update(changed)
+                    merged.provenance = list(dict.fromkeys(
+                        pointer for source in active for pointer in source.provenance
+                    ))
+                    assert merged.path is not None
+                    payload = merged.to_text().encode("utf-8")
+                    self._replace_file(merged.path, payload)
+                    merged.source_hash = hashlib.sha256(payload).hexdigest()
+                else:
+                    adopted = self._adopt_merge_target(
+                        existing_target, keeper, abstract, body, links, active
+                    )
+                    if adopted is None:
+                        raise ValidationError(
+                            [FieldError("name", "merge target already exists")]
+                        )
+                    merged = adopted
                 now = merged.valid_from or self.clock.timestamp()
                 for source in active:
                     assert source.path is not None
@@ -514,6 +523,33 @@ class Store:
                 self._project()
                 raise
             return merged
+
+    def _adopt_merge_target(
+        self,
+        existing: MemoryRecord,
+        keeper: MemoryRecord,
+        abstract: str,
+        body: str,
+        links: list[str],
+        active: list[MemoryRecord],
+    ) -> MemoryRecord | None:
+        """A previous run wrote the merged file but died before ending the sources.
+
+        Adopt it when it carries exactly the intended content, so the retry finishes
+        the invalidation instead of failing forever on its own target."""
+        wanted_provenance = list(
+            dict.fromkeys(pointer for source in active for pointer in source.provenance)
+        )
+        if (
+            existing.is_active()
+            and existing.type == keeper.type
+            and existing.abstract.strip() == abstract.strip()
+            and existing.body.strip() == body.strip()
+            and sorted(existing.links) == links
+            and list(existing.provenance) == wanted_provenance
+        ):
+            return existing
+        return None
 
     def gc(self) -> list[str]:
         """Physically removes invalid files. A human runs this; Manage cannot reach it."""
@@ -565,7 +601,9 @@ class Store:
 
     def _replace_file(self, path: pathlib.Path, payload: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=STAGED_PREFIX, delete=False
+        ) as temporary:
             temporary.write(payload)
             staged = pathlib.Path(temporary.name)
         try:

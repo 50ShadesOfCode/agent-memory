@@ -270,3 +270,22 @@ def test_move_preserves_identity_provenance_and_links(store):
     assert old_path is not None and not old_path.exists()
     assert moved.path is not None and moved.path.is_file()
     assert store.find("widget-hum").fields["topic"] == "apples"
+
+
+def test_init_reaps_staged_leftovers_from_killed_writes(store):
+    staged = [
+        store.root / "fact" / "default" / ".staged-aaa",
+        store.layout.watermarks / ".staged-bbb",
+        store.layout.state_dir / ".staged-ccc",
+    ]
+    (store.root / "fact" / "default").mkdir(parents=True, exist_ok=True)
+    for path in staged:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("torn", encoding="utf-8")
+    keep = store.root / "fact" / "default" / "real.md"
+    keep.write_text("keep me", encoding="utf-8")
+
+    store.layout.ensure()
+
+    assert not any(path.exists() for path in staged)
+    assert keep.is_file()

@@ -15,7 +15,7 @@ import tempfile
 from .clock import Clock
 from .errors import FieldError, ValidationError
 from .locking import store_lock
-from .paths import StoreLayout
+from .paths import STAGED_PREFIX, StoreLayout
 
 MARK_SUFFIX = ".json"
 KEY_CONSUMED = "consumed"
@@ -99,7 +99,9 @@ class Watermark:
                 KEY_DISTILLED: mark.distilled,
             }
         ).encode("utf-8")
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=STAGED_PREFIX, delete=False
+        ) as temporary:
             temporary.write(payload)
             staged = pathlib.Path(temporary.name)
         try:
