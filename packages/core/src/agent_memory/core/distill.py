@@ -143,7 +143,7 @@ def _drop_replays(
         for record in store.records()
     }
     kept: list[tuple[dict[str, object], dict[str, object]]] = []
-    for spec, origin in zip(accepted, origins):
+    for spec, origin in zip(accepted, origins, strict=True):
         key = (
             str(spec.get("type") or ""),
             str(spec.get("abstract") or "").strip(),
