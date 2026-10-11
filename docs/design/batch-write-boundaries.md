@@ -4,6 +4,10 @@ Store handles a batch under one writer lock. Invalid input rejects its own item 
 an index and field error; accepted siblings share one projection. Single-record
 writes use the same validation and persistence boundary.
 
+Projection after a Store write covers only files the write touched. Full passes
+stay on explicit sync and rebuild, which remain the discovery path for changes
+made outside Store.
+
 An operational failure during writing or projection aborts the batch. Store restores
 touched canonical memory files to their pre-batch contents and projects the restored
 truth before propagating the error, provided storage remains available for recovery.

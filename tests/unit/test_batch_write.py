@@ -106,8 +106,12 @@ def test_a_batch_can_supersede_within_itself(store):
 def test_the_batch_path_is_the_same_write_path(store, monkeypatch):
     """Invariant 2: batching must not become a second way into the store."""
     calls = []
-    original = type(store)._project
-    monkeypatch.setattr(type(store), "_project", lambda self: calls.append(1) or original(self))
+    original = type(store)._project_paths
+    monkeypatch.setattr(
+        type(store),
+        "_project_paths",
+        lambda self, paths: calls.append(1) or original(self, paths),
+    )
     store.record_many(SPECS)
     assert len(calls) == 1, "a batch projects once, not once per record"
 
@@ -276,18 +280,18 @@ def test_failed_batches_restore_all_canonical_changes(store, monkeypatch, failur
         monkeypatch.setattr(store, "_replace_file", fail_predecessor_once)
         error_type, message = OSError, "injected write failure"
     else:
-        project = store._project
+        project = store._project_paths
         failed = False
 
-        def fail_after_projection_once():
+        def fail_after_projection_once(paths):
             nonlocal failed
-            report = project()
+            report = project(paths)
             if not failed:
                 failed = True
                 raise RuntimeError("injected projection failure")
             return report
 
-        monkeypatch.setattr(store, "_project", fail_after_projection_once)
+        monkeypatch.setattr(store, "_project_paths", fail_after_projection_once)
         error_type, message = RuntimeError, "injected projection failure"
 
     with pytest.raises(error_type, match=message):

@@ -45,23 +45,9 @@ class Indexer:
         present = self._present_hashes()
         with self._database.connect() as connection:
             manifest = Manifest(connection, self._config.index.hash_prefix_length)
-            index = SearchIndex(connection)
             delta = manifest.diff(present)
-            unreadable: list[str] = []
-            reindexed: list[str] = []
-            for relative in delta.touched:
-                path = self._layout.root / relative
-                record = self._load(path)
-                index.remove_path(relative)
-                if record is None:
-                    manifest.forget(relative)
-                    unreadable.append(relative)
-                    continue
-                index.upsert(record, chunking.chunks(record, self._config), relative)
-                manifest.record(
-                    relative, record.name, present[relative], self._clock.now().isoformat()
-                )
-                reindexed.append(relative)
+            report = self._index_touched(connection, manifest, present, delta.touched)
+            index = SearchIndex(connection)
             for relative in delta.removed:
                 index.remove_path(relative)
                 manifest.forget(relative)
@@ -70,11 +56,87 @@ class Indexer:
                 self._sync_vectors(connection, present, self._embedder)
             dangling = self._dangling_links(index)
         return IndexReport(
-            reindexed=tuple(reindexed),
+            reindexed=report.reindexed,
             removed=delta.removed,
-            unreadable=tuple(unreadable),
+            unreadable=report.unreadable,
             dangling_links=dangling,
         )
+
+    def sync_paths(self, relatives: list[str]) -> IndexReport:
+        """Reproject only the named files. A write touches a few files; the full
+        pass stays on explicit sync and rebuild, which remain the discovery path
+        for changes made outside Store."""
+        wanted = sorted(set(relatives))
+        present: dict[str, str] = {}
+        for relative in wanted:
+            path = self._layout.root / relative
+            if self._layout.type_of(path) is None or not path.is_file():
+                continue
+            present[relative] = content_hash(
+                path.read_text(encoding="utf-8"), self._config.index.hash_prefix_length
+            )
+        with self._database.connect() as connection:
+            manifest = Manifest(connection, self._config.index.hash_prefix_length)
+            known = manifest.known()
+            report = self._index_touched(connection, manifest, present, tuple(wanted))
+            index = SearchIndex(connection)
+            removed = tuple(
+                relative for relative in wanted if relative not in present and relative in known
+            )
+            for relative in removed:
+                index.remove_path(relative)
+                manifest.forget(relative)
+            if self._config.index.vector_enabled:
+                assert self._embedder is not None
+                self._sync_vector_paths(connection, {r for r in wanted if r in present})
+            dangling = self._dangling_links(index)
+        return IndexReport(
+            reindexed=report.reindexed,
+            removed=removed,
+            unreadable=report.unreadable,
+            dangling_links=dangling,
+        )
+
+    def _index_touched(
+        self,
+        connection,
+        manifest: Manifest,
+        present: dict[str, str],
+        relatives: tuple[str, ...],
+    ) -> IndexReport:
+        index = SearchIndex(connection)
+        unreadable: list[str] = []
+        reindexed: list[str] = []
+        for relative in relatives:
+            if relative not in present:
+                continue
+            path = self._layout.root / relative
+            record = self._load(path)
+            index.remove_path(relative)
+            if record is None:
+                manifest.forget(relative)
+                unreadable.append(relative)
+                continue
+            index.upsert(record, chunking.chunks(record, self._config), relative)
+            manifest.record(
+                relative, record.name, present[relative], self._clock.now().isoformat()
+            )
+            reindexed.append(relative)
+        return IndexReport(reindexed=tuple(reindexed), unreadable=tuple(unreadable))
+
+    def _sync_vector_paths(self, connection, relatives: set[str]) -> None:
+        assert self._embedder is not None
+        vectors = VectorIndex(connection, self._embedder, self._config.index.vector_model)
+        for relative in sorted(relatives):
+            record = self._load(self._layout.root / relative)
+            if record is None:
+                vectors.remove_path(relative)
+                continue
+            digest = content_hash(
+                (self._layout.root / relative).read_text(encoding="utf-8"),
+                self._config.index.hash_prefix_length,
+            )
+            vectors.upsert(relative, digest, record, chunking.chunks(record, self._config))
 
     def _sync_vectors(self, connection, present: dict[str, str], embedder: Embedder) -> None:
         vectors = VectorIndex(connection, embedder, self._config.index.vector_model)

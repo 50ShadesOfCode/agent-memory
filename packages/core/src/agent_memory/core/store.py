@@ -151,7 +151,7 @@ class Store:
                             snapshots.setdefault(path, original)
                     except ValidationError as error:
                         rejected.append(Rejected(index=index, errors=list(error.errors)))
-                self._project()
+                self._project_paths(list(snapshots))
             except Exception:
                 self._restore_files(snapshots)
                 self._project()
@@ -462,7 +462,7 @@ class Store:
                 raise
             current.path = target
             try:
-                self._project()
+                self._project_paths([target, source])
             except Exception:
                 self._replace_file(source, previous)
                 target.unlink(missing_ok=True)
@@ -526,7 +526,7 @@ class Store:
                     source.updated = self.clock.timestamp()
                     record_module.validate(source, self.config, self.schemas.get(source.type))
                     self._replace_file(source.path, source.to_text().encode("utf-8"))
-                self._project()
+                self._project_paths(list(snapshots))
             except Exception:
                 self._restore_files(snapshots)
                 self._project()
@@ -564,12 +564,14 @@ class Store:
         """Physically removes invalid files. A human runs this; Manage cannot reach it."""
         removed: list[str] = []
         with store_lock(self.layout):
+            touched: list[pathlib.Path] = []
             for record in self.records(include_invalid=True):
                 if record.is_active() or record.path is None:
                     continue
                 record.path.unlink(missing_ok=True)
+                touched.append(record.path)
                 removed.append(record.name)
-            self._project()
+            self._project_paths(touched)
         return removed
 
     def write(self, record: MemoryRecord) -> MemoryRecord:
@@ -597,7 +599,7 @@ class Store:
         payload = record.to_text().encode("utf-8")
         self._replace_file(record.path, payload)
         try:
-            self._project()
+            self._project_paths([record.path])
         except Exception:
             if previous is None:
                 record.path.unlink(missing_ok=True)
@@ -716,6 +718,22 @@ class Store:
     def _project(self) -> IndexReport:
         report = self._indexer.sync()
         memory_md.write(self.layout, self.records())
+        return report
+
+    def _project_paths(self, paths: list[pathlib.Path]) -> IndexReport:
+        """Reproject files a write touched. Full passes stay on explicit sync,
+        rebuild and crash recovery, which remain the discovery path for changes
+        made outside Store."""
+        relatives = [
+            str(path.relative_to(self.root))
+            for path in paths
+            if path is not None and self.layout.type_of(path) is not None
+        ]
+        report = self._indexer.sync_paths(relatives)
+        with self._database.connect() as connection:
+            memory_md.write_entries(
+                self.layout, memory_md.rows_to_entries(SearchIndex(connection).rows())
+            )
         return report
 
     def _log_access(self, entries: list[AccessEntry]) -> None:

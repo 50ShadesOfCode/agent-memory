@@ -6,27 +6,46 @@ which rank by relevance as well as weight; the two tracks divide labor instead o
 
 from __future__ import annotations
 
+import dataclasses
+
 from .config import Config
 from .paths import StoreLayout
 from .record import MemoryRecord
 
 
+@dataclasses.dataclass(frozen=True)
+class Entry:
+    """One injected line. Rows from the search index convert to these, so a write
+    refreshes the injection without reparsing every truth file."""
+
+    name: str
+    abstract: str
+    location: str
+    weight: float
+    updated: str
+    active: bool
+
+
 def render(records: list[MemoryRecord], config: Config, root: str = "") -> str:
+    return render_entries([_entry_of(record, root) for record in records], config)
+
+
+def render_entries(entries: list[Entry], config: Config) -> str:
     eligible = [
-        record
-        for record in records
-        if record.is_active() and record.weight >= config.recall.memory_md_weight_floor
+        entry
+        for entry in entries
+        if entry.active and entry.weight >= config.recall.memory_md_weight_floor
     ]
-    eligible.sort(key=lambda record: (-record.weight, record.updated, record.name), reverse=False)
-    eligible.sort(key=lambda record: record.weight, reverse=True)
+    eligible.sort(key=lambda entry: (-entry.weight, entry.updated, entry.name), reverse=False)
+    eligible.sort(key=lambda entry: entry.weight, reverse=True)
 
     header = config.memory_md.header + "\n\n"
     lines: list[str] = []
     used = len(header.encode("utf-8"))
-    for record in eligible:
+    for entry in eligible:
         if len(lines) >= config.memory_md.max_lines:
             break
-        line = _line(record, root)
+        line = f"- [{entry.name}]({entry.location}) — {entry.abstract}\n"
         cost = len(line.encode("utf-8"))
         if used + cost > config.memory_md.budget_bytes:
             break
@@ -36,13 +55,38 @@ def render(records: list[MemoryRecord], config: Config, root: str = "") -> str:
 
 
 def write(layout: StoreLayout, records: list[MemoryRecord]) -> str:
-    text = render(records, layout.config, str(layout.root))
+    return write_entries(layout, [_entry_of(record, str(layout.root)) for record in records])
+
+
+def write_entries(layout: StoreLayout, entries: list[Entry]) -> str:
+    text = render_entries(entries, layout.config)
     layout.memory_index.write_text(text, encoding="utf-8")
     return text
 
 
-def _line(record: MemoryRecord, root: str) -> str:
+def rows_to_entries(rows) -> list[Entry]:
+    return [
+        Entry(
+            name=str(row["name"]),
+            abstract=str(row["abstract"]),
+            location=str(row["path"]),
+            weight=float(row["weight"]),
+            updated=str(row["updated"]),
+            active=row["invalid_at"] is None,
+        )
+        for row in rows
+    ]
+
+
+def _entry_of(record: MemoryRecord, root: str) -> Entry:
     location = str(record.path)
     if root and location.startswith(root):
         location = location[len(root) :].lstrip("/")
-    return f"- [{record.name}]({location}) — {record.abstract}\n"
+    return Entry(
+        name=record.name,
+        abstract=record.abstract,
+        location=location,
+        weight=record.weight,
+        updated=record.updated,
+        active=record.is_active(),
+    )

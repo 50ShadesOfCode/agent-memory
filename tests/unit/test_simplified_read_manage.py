@@ -58,17 +58,17 @@ def test_stale_manage_rewrite_is_rejected(store):
 def test_projection_failure_restores_canonical_memory(store, monkeypatch):
     written = store.record(type="fact", name="rollback", abstract="Before")
     before = written.path.read_bytes()
-    project = store._project
+    project = store._project_paths
     calls = 0
 
-    def fail_once():
+    def fail_once(paths):
         nonlocal calls
         calls += 1
         if calls == 1:
             raise RuntimeError("projection failed")
-        return project()
+        return project(paths)
 
-    monkeypatch.setattr(store, "_project", fail_once)
+    monkeypatch.setattr(store, "_project_paths", fail_once)
     with pytest.raises(RuntimeError, match="projection failed"):
         store.correct("rollback", abstract="After")
     assert written.path.read_bytes() == before
@@ -130,17 +130,17 @@ def test_failed_merge_rolls_back_all_files(store, monkeypatch):
     first = store.record(type="fact", name="first", abstract="First plan")
     second = store.record(type="fact", name="second", abstract="Second plan")
     before = {record.name: record.path.read_bytes() for record in (first, second)}
-    project = store._project
+    project = store._project_paths
     calls = 0
 
-    def fail_once():
+    def fail_once(paths):
         nonlocal calls
         calls += 1
         if calls == 1:
             raise RuntimeError("index failed")
-        return project()
+        return project(paths)
 
-    monkeypatch.setattr(store, "_project", fail_once)
+    monkeypatch.setattr(store, "_project_paths", fail_once)
     with pytest.raises(RuntimeError, match="index failed"):
         store.merge(["first", "second"], "Combined plan", "Combined body")
     assert {name: store.find(name).path.read_bytes() for name in before} == before

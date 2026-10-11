@@ -4,6 +4,23 @@ All notable changes to this project are recorded here, newest first.
 Entries are added under `Unreleased` with each change and moved under a
 version heading on release.
 
+## Unreleased
+
+### Added
+
+- Offline recall benchmark: 140 seeded records (English and Russian plus
+  confusable families), 140 queries, pinned floors Recall@1 >= 0.90,
+  Recall@5 >= 0.95, recall p99 <= 500 ms (`tests/system/test_recall_benchmark.py`).
+- Benchmark and experiment design covering five tracks
+  (`docs/plans/benchmarks-design.md`).
+
+### Fixed
+
+- Write scaling: a single write no longer rehashes and reparses the whole
+  store. Projection after a write covers only touched files (`Indexer.sync_paths`),
+  and the injected index renders from indexed rows. Full passes stay on explicit
+  sync, rebuild and crash recovery.
+
 ## 0.1.0 — 2026-10-11
 
 First release under our own roof: OpenCode host support, Unicode recall,
