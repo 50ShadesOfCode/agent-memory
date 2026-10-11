@@ -2,11 +2,11 @@
 
 ### agent-memory: the long-term memory runtime for AI agents
 
-<a href="CLAUDE.md">Invariants</a> · <a href="skills/agent-memory/SKILL.md">Skill</a> · <a href="https://github.com/tigerless-labs/agent-memory/issues">Issues</a>
+<a href="AGENTS.md">Invariants</a> · <a href="skills/agent-memory/SKILL.md">Skill</a> · <a href="https://github.com/50ShadesOfCode/agent-memory/issues">Issues</a>
 
 ![](https://img.shields.io/badge/version-0.1.0-369eff?labelColor=black&style=flat-square)
 ![](https://img.shields.io/badge/python-3.12+-ffcb47?labelColor=black&style=flat-square)
-![](https://img.shields.io/badge/hosts-Claude%20Code%2C%20Codex%20CLI%2C%20Muse%20Code-ff80eb?labelColor=black&style=flat-square)
+![](https://img.shields.io/badge/hosts-Claude%20Code%2C%20Codex%20CLI%2C%20Muse%20Code%2C%20OpenCode-ff80eb?labelColor=black&style=flat-square)
 ![](https://img.shields.io/badge/dependencies-zero%20API%20keys-c4f042?labelColor=black&style=flat-square)
 
 </div>
@@ -16,7 +16,7 @@
 An agent that closes its session forgets everything it learned in it. agent-memory is the
 runtime that fixes that, for any agent — not only coding ones. Markdown files in one store are
 the single source of truth, the SQLite index beside them is a cache you can delete at any time,
-and Claude Code, Codex CLI, Muse Code, and anything else that can run a shell command share
+and Claude Code, Codex CLI, Muse Code, OpenCode, and anything else that can run a shell command share
 that store.
 
 Retrieval is local and ranked, and it answers with paths rather than pasted text — the agent
@@ -133,8 +133,8 @@ and Hermes pass — what one host's shell writes, another's finds, specifics int
 contribution over no memory: 2/36 → 13/36, p=0.0074.
 
 The protocol that decides whether a measurement counts as a result, the full ledger, and the
-raw run records live in `docs/experiments.md` and `experiments/` in the working tree. They ship
-with the source, not with git history.
+raw run records live in `experiments/` in the working tree. They ship
+with the source runs, not with git history.
 
 ## Install
 
@@ -142,7 +142,7 @@ Requires Python 3.12 or higher and [uv](https://docs.astral.sh/uv/). There is no
 PyPI yet, so install from a checkout:
 
 ```bash
-git clone https://github.com/tigerless-labs/agent-memory.git
+git clone https://github.com/50ShadesOfCode/agent-memory.git
 cd agent-memory
 uv sync --all-packages
 ```
@@ -178,10 +178,11 @@ rm -rf ~/agent-memory-store/.index && mem rebuild
 ```bash
 mem setup --host claude-code
 mem setup --host codex
+mem setup --host opencode
 mem setup --host muse-code --provider openrouter
 ```
 
-All three commands use the same pipeline: probe the host, initialize or check the Store, safely
+All these commands use the same pipeline: probe the host, initialize or check the Store, safely
 merge host settings, install lifecycle hooks and the skill, perform provider-specific setup,
 then run preflight. A successful command ends with `status: READY`; a written configuration is
 not by itself considered ready. Re-running setup is safe and does not duplicate managed hooks,
@@ -199,6 +200,7 @@ Run the same checks later, or get a precise failure layer after setup fails:
 ```bash
 mem doctor --host claude-code
 mem doctor --host codex
+mem doctor --host opencode
 mem doctor --host muse-code --provider openrouter
 ```
 
@@ -426,7 +428,7 @@ The OpenCode plugin needs its own dependencies once per checkout:
 cd plugins/opencode && npm ci
 ```
 
-The task lifecycle and the invariants a change must not break are in [CLAUDE.md](CLAUDE.md).
+The task lifecycle and the invariants a change must not break are in [AGENTS.md](AGENTS.md).
 
 ## Optional vector recall index
 
