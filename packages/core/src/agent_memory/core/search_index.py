@@ -10,7 +10,7 @@ from .chunking import Chunk
 from .database import SURFACE_ACTIVE, SURFACE_HISTORY
 from .record import MemoryRecord
 
-_TOKENS = re.compile(r"[0-9A-Za-z_А-Яа-яЁё]+")
+_TOKENS = re.compile(r"\w+", re.UNICODE)
 LINK_SEPARATOR = ","
 SURFACES = (SURFACE_ACTIVE, SURFACE_HISTORY)
 
@@ -26,7 +26,11 @@ class Candidate:
 
 def to_match_query(query: str) -> str:
     tokens = [token.lower() for token in _TOKENS.findall(query)]
-    return " OR ".join(f'"{token}"' for token in dict.fromkeys(tokens))
+    prefixed = [
+        f'"{token}"*' if not token.isascii() else f'"{token}"'
+        for token in dict.fromkeys(tokens)
+    ]
+    return " OR ".join(prefixed)
 
 
 class SearchIndex:
