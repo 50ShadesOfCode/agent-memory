@@ -193,6 +193,22 @@ test("distill-titled sessions are skipped", async () => {
   }
 });
 
+test("an unverifiable session is skipped, not captured", async () => {
+  const dir = store();
+  const s = stub({ hook: "true", store: dir, throttleMs: 0 }, messages());
+  s.ctx.session.get = async () => {
+    throw new Error("transient outage");
+  };
+  const done = await start(s);
+  try {
+    await s.handlers["prompt"]({ sessionID: "s-dark", prompt: { text: "hi", files: [] } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(await s.storage.get("pointer:s-dark"), undefined);
+  } finally {
+    done();
+  }
+});
+
 test("a custom distill title is honored", async () => {
   const dir = store();
   const s = stub(

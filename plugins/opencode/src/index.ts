@@ -119,7 +119,7 @@ async function executorOwned(
     const info = (await ctx.session.get({ sessionID })) as { title?: unknown } | null;
     return typeof info?.title === "string" && info.title === distillTitle;
   } catch {
-    return false;
+    return true;
   }
 }
 
