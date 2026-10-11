@@ -270,7 +270,9 @@ class Manage:
         for record in entries:
             if record.name == keeper.name:
                 continue
-            self._store.supersede(record.name, keeper.name)
+            self._store.supersede(
+                record.name, keeper.name, expected_successor_hash=keeper.source_hash
+            )
         return f"kept {keeper.name}"
 
     def _split(self, proposal: Proposal, verdict: reasoning.Verdict) -> str:

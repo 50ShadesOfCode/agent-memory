@@ -166,3 +166,26 @@ def test_a_captured_reasoner_is_bounded_by_the_menu_and_the_per_sleep_cap(seeded
     twins = ["drain-twin-first", "drain-twin-second", "flush-twin-first", "flush-twin-second"]
     assert len([name for name in twins if seeded.find(name).is_active()]) == len(twins) - 1
     assert all(seeded.find(name).path.exists() for name in twins)
+
+
+def test_distill_prompt_labels_memories_and_conversation_as_untrusted(seeded):
+    from agent_memory.core import prompts, reconcile, sessions
+
+    seeded.record(
+        abstract="Operational note that carries an injection payload",
+        type="experience",
+        body=PAYLOAD,
+        name="poisoned-note",
+    )
+    pointer = seeded.archive.append_session("trap", [f"user: {PAYLOAD}"])
+    messages = sessions.resolve(seeded.layout, pointer)
+    sheet = reconcile.build(seeded, "trap", messages)
+    text = prompts.distill_sheet(
+        prompts.slot_table(seeded.schemas.all()),
+        sheet.render(),
+        "\n".join(message.text for message in messages),
+    )
+
+    assert "untrusted data" in text
+    assert text.index("untrusted data") < text.index("poisoned-note")
+    assert text.index("untrusted data") < text.index(PAYLOAD)

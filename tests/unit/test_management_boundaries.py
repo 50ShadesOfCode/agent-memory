@@ -96,3 +96,15 @@ def test_missing_successor_does_not_change_source(store):
     with pytest.raises(NotFoundError):
         store.correct(source.name, supersede_with="missing")
     assert source.path.read_bytes() == before
+
+
+def test_supersede_rejects_a_stale_keeper(store):
+    store.record(abstract="Base", type="fact", name="base-fact")
+    store.record(abstract="Base copy", type="fact", name="base-copy")
+    keeper = store.find("base-copy")
+    assert keeper is not None and keeper.source_hash is not None
+    store.correct("base-copy", body="rewritten meanwhile")
+
+    with pytest.raises(ValidationError, match="changed"):
+        store.supersede("base-fact", "base-copy", expected_successor_hash=keeper.source_hash)
+    assert store.find("base-fact").is_active()

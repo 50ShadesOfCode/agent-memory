@@ -351,6 +351,7 @@ class Store:
         links: list[str] | None = None,
         valid_from: str | None = None,
         provenance: list[str] | None = None,
+        expected_successor_hash: str | None = None,
     ) -> MemoryRecord:
         with store_lock(self.layout):
             current = self.find(name)
@@ -368,6 +369,15 @@ class Store:
                 if not successor.is_active():
                     raise ValidationError(
                         [FieldError("supersede_with", "successor must be active")]
+                    )
+                if (
+                    expected_successor_hash is not None
+                    and successor.path is not None
+                    and hashlib.sha256(successor.path.read_bytes()).hexdigest()
+                    != expected_successor_hash
+                ):
+                    raise ValidationError(
+                        [FieldError("supersede_with", "successor changed since it was read")]
                     )
                 record_module.invalidate(current, successor.valid_from or now, supersede_with)
             if abstract is not None:
@@ -396,8 +406,12 @@ class Store:
             current.updated = now
             return self._write_locked(current)
 
-    def supersede(self, old: str, new: str) -> MemoryRecord:
-        return self.correct(old, supersede_with=new)
+    def supersede(
+        self, old: str, new: str, expected_successor_hash: str | None = None
+    ) -> MemoryRecord:
+        return self.correct(
+            old, supersede_with=new, expected_successor_hash=expected_successor_hash
+        )
 
     def merge(
         self, names: list[str], abstract: str, body: str, name: str | None = None
