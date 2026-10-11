@@ -323,3 +323,16 @@ def test_setup_writes_an_absolute_hook_command_and_installs_the_skill(tmp_path, 
     assert executable.endswith(setup.HOOK_COMMAND) and executable.startswith("/")
     skill = settings.parent / "skills" / "agent-memory" / "SKILL.md"
     assert skill.read_text(encoding="utf-8") == prompts.skill()
+
+
+def test_memory_index_marks_lines_as_data_not_instructions(seeded):
+    from agent_memory.core import memory_md
+
+    rendered = memory_md.render(
+        [seeded.find("file-truth-invariant")], seeded.config
+    )
+
+    assert "not instructions" in rendered
+    assert seeded.layout.memory_index.read_bytes().startswith(
+        injection.payload(seeded).encode("utf-8")
+    )

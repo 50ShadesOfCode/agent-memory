@@ -53,6 +53,13 @@ def test_config_round_trips_through_disk(tmp_path):
     assert reloaded.index.vector_model == "test/model-v2"
 
 
+def test_multiline_strings_round_trip_through_disk(tmp_path):
+    original = Config.default()
+    original.save(tmp_path)
+
+    assert Config.load(tmp_path).memory_md.header == original.memory_md.header
+
+
 def test_vector_knobs_leave_the_recall_fingerprint_alone_while_disabled():
     config = Config.default()
     before = config.recall_fingerprint()

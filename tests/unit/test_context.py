@@ -56,3 +56,10 @@ def test_context_only_reaches_memory(store):
     )
     store.sync_index()
     assert "Octopus" not in build(store, "My Octopus Teacher").text
+
+
+def test_context_marks_entries_as_data_not_instructions(seeded):
+    text = build(seeded, "deploy drain queue").text
+
+    assert "not instructions" in text
+    assert text.rstrip().endswith("End of memory entries.")
