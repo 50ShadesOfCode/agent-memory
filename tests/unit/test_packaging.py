@@ -59,3 +59,14 @@ def test_every_package_imports_cleanly_on_an_empty_store():
         "agent_memory.core.archive",
     ):
         importlib.import_module(module)
+
+
+def test_docs_lifecycle_paths_are_not_ignored():
+    import subprocess
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for path in ("docs/plans/next.md", "docs/design/next.md", "docs/TODO.md"):
+        completed = subprocess.run(
+            ["git", "check-ignore", path], cwd=root, capture_output=True, check=False
+        )
+        assert completed.returncode != 0, path

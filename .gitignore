@@ -9,5 +9,4 @@ __pycache__/
 .coverage
 # The experiment tree stays on disk and stays the evidence; it no longer enters git history.
 experiments/
-docs/
 node_modules/
