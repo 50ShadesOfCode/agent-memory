@@ -394,3 +394,18 @@ def test_known_key_shapes_are_redacted(secret):
 
     assert secret not in redact.redacted(f"leaked {secret} here")
     assert "[REDACTED]" in redact.redacted(f"leaked {secret} here")
+
+
+def test_launched_executor_treats_hostile_session_as_value(store, monkeypatch):
+    from agent_memory.cli.main import _parser
+
+    launched = {}
+
+    def fake_popen(command, **kwargs):
+        launched["command"] = command
+
+    monkeypatch.setattr("subprocess.Popen", fake_popen)
+    assert hook_entry.launch_distill(store, "--force", "--reason-host")
+    args = _parser().parse_args(launched["command"][1:])
+    assert args.session == ["--force"]
+    assert args.reason_host == "--reason-host"
