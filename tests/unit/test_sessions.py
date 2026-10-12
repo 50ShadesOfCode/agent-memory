@@ -120,3 +120,19 @@ def test_capture_archives_the_increment_as_numbered_messages_and_returns_its_poi
     assert [message.text for message in sessions.resolve(store.layout, pointer)] == [
         line.split(": ", 1)[1] for line in LINES
     ]
+
+
+def test_append_heals_torn_tail_before_counting(store):
+    from agent_memory.core import sessions
+
+    sessions.append(store.layout, "s", ["user: one", "user: two"], store.clock)
+    path = store.layout.sessions / "s.jsonl"
+    raw = path.read_bytes()
+    path.write_bytes(raw + b'{"role": "user", "torn tail')
+    pointer = sessions.append(store.layout, "s", ["user: three"], store.clock)
+    assert pointer.start == 2
+    assert [message.text for message in sessions.read(store.layout, "s")] == [
+        "one",
+        "two",
+        "three",
+    ]

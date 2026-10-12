@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import pathlib
@@ -43,7 +44,8 @@ class Archive:
                 ordinal += 1
                 path = original.with_name(f"{original.stem}-{ordinal}{original.suffix}")
             finally:
-                os.unlink(staged.name, missing_ok=True)
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(staged.name)
 
     def provenance_of(self, name: str) -> list[pathlib.Path]:
         folder = self._layout.provenance / name

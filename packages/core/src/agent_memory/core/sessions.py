@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import pathlib
 import re
 
@@ -116,6 +117,7 @@ def append(
     path = session_path(layout, session)
     path.parent.mkdir(parents=True, exist_ok=True)
     with store_lock(layout):
+        _heal_torn_tail(path)
         start = count(path)
         stamp = clock.timestamp()
         lines: list[str] = []
@@ -128,6 +130,8 @@ def append(
             return Pointer(session, start, max(start - 1, 0))
         with path.open("a", encoding="utf-8") as handle:
             handle.write("\n".join(lines) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
         return Pointer(session, start, start + len(lines) - 1)
 
 
@@ -136,6 +140,25 @@ def count(path: pathlib.Path) -> int:
         return 0
     with path.open(encoding="utf-8") as handle:
         return sum(1 for line in handle if line.strip())
+
+
+def _heal_torn_tail(path: pathlib.Path) -> None:
+    """Drop a trailing fragment a killed append left behind.
+
+    Every append terminates its bytes with a newline, so a file not ending in
+    one holds a torn tail that would otherwise consume a message index."""
+    if not path.exists():
+        return
+    with path.open("rb+") as handle:
+        data = handle.read()
+        if not data or data.endswith(b"\n"):
+            return
+        cut = data.rfind(b"\n")
+        handle.seek(0)
+        handle.truncate()
+        if cut >= 0:
+            handle.write(data[: cut + 1])
+            handle.flush()
 
 
 def read(layout: StoreLayout, session: str) -> list[Message]:
