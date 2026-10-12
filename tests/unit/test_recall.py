@@ -214,25 +214,19 @@ def test_the_recall_list_length_is_a_knob(seeded):
     assert {hit.name for hit in narrow} <= {hit.name for hit in wide}
 
 
-def test_recall_serializes_access_log_append(seeded, monkeypatch):
-    import contextlib
+def test_recall_logs_telemetry_without_writer_lock(seeded):
+    import threading
 
-    import agent_memory.core.recall as recall_module
+    from agent_memory.core.locking import store_lock
 
-    held = []
-    real = recall_module.store_lock
-
-    @contextlib.contextmanager
-    def recording(layout):
-        held.append(True)
-        with real(layout):
-            yield
-
-    monkeypatch.setattr(recall_module, "store_lock", recording)
-
-    assert Recall(seeded).recall("single source of truth")
-
-    assert held
+    done = threading.Event()
+    with store_lock(seeded.layout):
+        worker = threading.Thread(
+            target=lambda: (Recall(seeded).recall("single source of truth"), done.set())
+        )
+        worker.start()
+        assert done.wait(timeout=10), "recall telemetry blocked behind the writer lock"
+        worker.join(timeout=10)
 
 
 def test_injection_and_recall_divide_labor_by_design(seeded, clock):

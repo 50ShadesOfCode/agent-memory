@@ -125,3 +125,19 @@ def test_watermark_read_rejects_a_corrupt_file_loudly(tmp_path):
 
     with pytest.raises(MemoryStoreError, match=r"s\.json"):
         Watermark(layout).read("s")
+
+
+def test_telemetry_does_not_wait_on_writer_lock(store):
+    import threading
+
+    from agent_memory.core.locking import store_lock
+
+    done = threading.Event()
+    with store_lock(store.layout):
+        worker = threading.Thread(
+            target=lambda: (store.feedback("telemetry-probe", 1.0), done.set())
+        )
+        store.record(type="fact", name="telemetry-probe", abstract="probe", body="x")
+        worker.start()
+        assert done.wait(timeout=10), "telemetry blocked behind the writer lock"
+        worker.join(timeout=10)

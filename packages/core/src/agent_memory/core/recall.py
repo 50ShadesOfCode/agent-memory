@@ -15,7 +15,6 @@ from . import observation, timestamp
 from .access_log import KIND_RECALL, AccessEntry, AccessLog
 from .config import Config
 from .database import SURFACE_ACTIVE, SURFACE_HISTORY, Database
-from .locking import store_lock
 from .search_index import LINK_SEPARATOR, Candidate, SearchIndex, normalize_scope
 from .store import Store
 from .vector_index import VectorIndex
@@ -129,7 +128,7 @@ class Recall:
                 for hit in hits
             ]
         if entries:
-            with store_lock(self._store.layout), self._database.connect() as logged:
+            with self._database.connect() as logged:
                 AccessLog(logged).append(entries)
         observation.emit(
             "recall_return", query=query, scope=scope, as_of=as_of,

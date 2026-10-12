@@ -802,7 +802,9 @@ class Store:
         return False
 
     def _log_access(self, entries: list[AccessEntry]) -> None:
-        with store_lock(self.layout), self._database.connect() as connection:
+        # Telemetry rides on WAL + busy_timeout, never on the writer lock:
+        # a recall storm must not serialize behind (or stall) real writes.
+        with self._database.connect() as connection:
             AccessLog(connection).append(entries)
 
     def _at(self, path: pathlib.Path | None) -> MemoryRecord | None:
