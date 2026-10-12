@@ -39,6 +39,22 @@ def test_the_watermark_never_moves_backwards(store):
     assert watermark.advance("session-c", 1).consumed == len(SEGMENTS)
 
 
+def test_hook_ignores_non_session_transcript_paths(tmp_path):
+    secret = tmp_path / "id_rsa"
+    secret.write_text("private", encoding="utf-8")
+
+    def items_for(filename):
+        return hook_entry._items(
+            {hook_entry.KEY_HOST: "opencode", hook_entry.KEY_TRANSCRIPT: str(filename)}
+        )
+
+    assert items_for(secret) == []
+    assert items_for(tmp_path / "missing.jsonl") == []
+    session = tmp_path / "session.jsonl"
+    session.write_text('{"role": "user", "content": "hi"}\n', encoding="utf-8")
+    assert any("hi" in item for item in items_for(session))
+
+
 def test_captured_material_is_archived_even_when_nothing_is_distilled(store):
     result = capture_module.capture(store, "session-d", SEGMENTS)
     archived = store.layout.sessions / "session-d.jsonl"

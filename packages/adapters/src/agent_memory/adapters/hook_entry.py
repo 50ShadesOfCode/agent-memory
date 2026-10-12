@@ -209,17 +209,24 @@ def _items(event: dict[str, object]) -> list[str]:
             str(event.get(KEY_SESSION) or ""),
             data_home=pathlib.Path(str(data_home)) if data_home else None,
         )
-    found = (
-        transcript.items(pathlib.Path(str(path)), host=host)
-        if path
-        else []
-    )
+    resolved = _transcript_path(path) if path else None
+    found = transcript.items(resolved, host=host) if resolved else []
     if host == moments.HOST_MUSE_CODE and found:
         final = str(event.get("last_assistant_message") or "").strip()
         rendered = f"assistant: {final}" if final else ""
         if rendered and rendered not in found:
             found.append(rendered)
     return found
+
+
+def _transcript_path(raw: object) -> pathlib.Path | None:
+    # shortcut: suffix + file gate, not a session-dir allowlist. Hosts own
+    # their session dirs; any local .jsonl is attacker-writable anyway, so a
+    # dir list adds config without security. Upgrade if hooks cross a trust boundary.
+    resolved = pathlib.Path(str(raw)).resolve()
+    if resolved.suffix != ".jsonl" or not resolved.is_file():
+        return None
+    return resolved
 
 
 def normalize_event(event: object, host: str = "") -> dict[str, object]:
