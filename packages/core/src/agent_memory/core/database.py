@@ -120,3 +120,7 @@ class Database:
 
     def drop(self) -> None:
         self._layout.index_db.unlink(missing_ok=True)
+        for suffix in ("-wal", "-shm"):
+            self._layout.index_db.parent.joinpath(
+                self._layout.index_db.name + suffix
+            ).unlink(missing_ok=True)
