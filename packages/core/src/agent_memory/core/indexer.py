@@ -178,12 +178,12 @@ class Indexer:
         return record, text
 
     def _dangling_links(self, index: SearchIndex) -> tuple[tuple[str, str], ...]:
-        rows = index.rows()
-        known = {row["name"] for row in rows}
+        rows = index.name_link_rows()
+        known = {name for name, _ in rows}
         dangling: list[tuple[str, str]] = []
-        for row in rows:
-            for link in str(row["links"]).split(","):
+        for name, links in rows:
+            for link in links.split(","):
                 target = link.strip()
                 if target and target not in known:
-                    dangling.append((str(row["name"]), target))
+                    dangling.append((name, target))
         return tuple(sorted(dangling))

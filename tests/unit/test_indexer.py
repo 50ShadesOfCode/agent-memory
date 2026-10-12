@@ -86,3 +86,16 @@ def test_memory_md_budget_is_a_hard_ceiling(store):
         )
     text = store.layout.memory_index.read_text(encoding="utf-8")
     assert len(text.encode("utf-8")) <= store.config.memory_md.budget_bytes
+
+
+def test_touched_projection_keeps_full_dangling_report(store):
+    legacy = store.root / "fact" / "default" / "legacy.md"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(
+        "---\nname: legacy\ntype: fact\nabstract: legacy\nproject: default\nsubject: legacy\n"
+        'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+        "author: t\nlinks: [not-written-yet]\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    store.record(type="fact", name="unrelated", abstract="unrelated", body="x")
+    assert ("legacy", "not-written-yet") in store.sync_index().dangling_links

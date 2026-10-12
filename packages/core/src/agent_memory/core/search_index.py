@@ -94,6 +94,14 @@ class SearchIndex:
         for row in rows:
             self.remove(row["name"])
 
+    def name_link_rows(self) -> list[tuple[str, str]]:
+        return [
+            (str(row["name"]), str(row["links"]))
+            for row in self._connection.execute(
+                "SELECT name, links FROM records"
+            ).fetchall()
+        ]
+
     def rows(self, include_invalid: bool = True) -> list[sqlite3.Row]:
         if include_invalid:
             return self._connection.execute("SELECT * FROM records").fetchall()
