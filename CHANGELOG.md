@@ -6,6 +6,11 @@ version heading on release.
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-12
+
+Benchmark tracks 1–3 and 5 done (track 4 deferred: free-tier quota blocks
+the full 120-episode matrix), plus project-review cleanup.
+
 ### Added
 
 - Offline recall benchmark: 140 seeded records (English and Russian plus
@@ -20,9 +25,12 @@ version heading on release.
   store. Projection after a write covers only touched files (`Indexer.sync_paths`),
   and the injected index renders from indexed rows. Full passes stay on explicit
   sync, rebuild and crash recovery.
-- Stress and soak coverage: 10k-record soak (recall p99 vs size, full rebuild
-  budget) plus concurrent writers at volume with zero loss
+- Stress and soak coverage: 10k-record soak (single-write p99, recall p99 vs
+  size, full rebuild budget) plus concurrent writers at volume with zero loss
   (`tests/system/test_soak.py`, `tests/system/test_concurrency_soak.py`).
+- Project review cleanup: dropped a redundant re-sort in the injected index
+  render, typed index-row conversion, and read each truth file once for
+  parse plus hash instead of twice.
 
 ## 0.1.0 — 2026-10-11
 
