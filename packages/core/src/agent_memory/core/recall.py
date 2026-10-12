@@ -100,7 +100,7 @@ class Recall:
                 candidates = candidates + index.match(
                     query, pool, SURFACE_HISTORY, scope_path=scope_path
                 )
-            eligible = self._eligible(index.rows(), scope=scope, as_of=as_of)
+            eligible = self._eligible(index.eligibility_rows(), scope=scope, as_of=as_of)
             if self._config.index.vector_enabled:
                 assert self._store.embedder is not None
                 dense = VectorIndex(
@@ -114,7 +114,7 @@ class Recall:
                         self._config.recall.rrf_k,
                         self._config.recall.rrf_source_count,
                     )
-            hits = self._rank(candidates, eligible, as_of=as_of)
+            hits = self._rank(candidates, eligible, as_of=as_of, index=index)
             hits = hits[:limit]
             if not log:
                 return hits
@@ -175,6 +175,7 @@ class Recall:
         candidates: list[Candidate],
         eligible: dict[str, sqlite3.Row],
         as_of: str | None,
+        index: SearchIndex,
     ) -> list[Hit]:
         best: dict[str, tuple[float, str, str]] = {}
         for candidate in candidates:
@@ -186,9 +187,10 @@ class Recall:
                 best[candidate.name] = (weighted, candidate.anchor, candidate.heading)
 
         reference = timestamp.parse(as_of) if as_of else self._store.clock.now()
+        full = index.rows_for_names(set(best))
         hits: list[Hit] = []
         for name, (relevance, anchor, heading) in best.items():
-            row = eligible[name]
+            row = full[name]
             recency = self._recency(str(row["updated"]), reference)
             weight = float(row["weight"])
             hits.append(

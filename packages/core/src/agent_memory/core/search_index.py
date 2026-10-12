@@ -6,6 +6,7 @@ import dataclasses
 import pathlib
 import re
 import sqlite3
+from collections.abc import Collection
 
 from .chunking import Chunk
 from .database import SURFACE_ACTIVE, SURFACE_HISTORY
@@ -106,6 +107,20 @@ class SearchIndex:
         if include_invalid:
             return self._connection.execute("SELECT * FROM records").fetchall()
         return self._connection.execute("SELECT * FROM records WHERE invalid_at IS NULL").fetchall()
+
+    def eligibility_rows(self) -> list[sqlite3.Row]:
+        return self._connection.execute(
+            "SELECT name, path, invalid_at, valid_from FROM records"
+        ).fetchall()
+
+    def rows_for_names(self, names: Collection[str]) -> dict[str, sqlite3.Row]:
+        if not names:
+            return {}
+        placeholders = ",".join("?" for _ in names)
+        rows = self._connection.execute(
+            f"SELECT * FROM records WHERE name IN ({placeholders})", tuple(names)
+        ).fetchall()
+        return {str(row["name"]): row for row in rows}
 
     def row(self, name: str) -> sqlite3.Row | None:
         return self._connection.execute("SELECT * FROM records WHERE name = ?", (name,)).fetchone()
