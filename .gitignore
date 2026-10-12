@@ -10,3 +10,4 @@ __pycache__/
 # The experiment tree stays on disk and stays the evidence; it no longer enters git history.
 experiments/
 node_modules/
+.worktrees/
