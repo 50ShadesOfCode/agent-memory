@@ -111,7 +111,7 @@ class Indexer:
             if relative not in present:
                 continue
             path = self._layout.root / relative
-            record = self._load(path)
+            record, _ = self._load(path)
             index.remove_path(relative)
             if record is None:
                 manifest.forget(relative)
@@ -128,14 +128,11 @@ class Indexer:
         assert self._embedder is not None
         vectors = VectorIndex(connection, self._embedder, self._config.index.vector_model)
         for relative in sorted(relatives):
-            record = self._load(self._layout.root / relative)
-            if record is None:
+            record, text = self._load(self._layout.root / relative)
+            if record is None or text is None:
                 vectors.remove_path(relative)
                 continue
-            digest = content_hash(
-                (self._layout.root / relative).read_text(encoding="utf-8"),
-                self._config.index.hash_prefix_length,
-            )
+            digest = content_hash(text, self._config.index.hash_prefix_length)
             vectors.upsert(relative, digest, record, chunking.chunks(record, self._config))
 
     def _sync_vectors(self, connection, present: dict[str, str], embedder: Embedder) -> None:
@@ -147,7 +144,7 @@ class Indexer:
         for relative, digest in sorted(memory_paths.items()):
             if known.get(relative) == (digest, self._config.index.vector_model):
                 continue
-            record = self._load(self._layout.root / relative)
+            record, _ = self._load(self._layout.root / relative)
             if record is not None:
                 vectors.upsert(relative, digest, record, chunking.chunks(record, self._config))
             else:
@@ -166,18 +163,19 @@ class Indexer:
             )
         return present
 
-    def _load(self, path: pathlib.Path) -> MemoryRecord | None:
+    def _load(self, path: pathlib.Path) -> tuple[MemoryRecord | None, str | None]:
         type_name = self._layout.type_of(path)
         if type_name is None:
-            return None
+            return None, None
         try:
-            record = MemoryRecord.from_text(path.read_text(encoding="utf-8"), path)
+            text = path.read_text(encoding="utf-8")
+            record = MemoryRecord.from_text(text, path)
             record_module.validate(record, self._config, self._schemas.get(type_name))
         except ValidationError:
-            return None
+            return None, None
         if record.type != type_name:
-            return None
-        return record
+            return None, None
+        return record, text
 
     def _dangling_links(self, index: SearchIndex) -> tuple[tuple[str, str], ...]:
         rows = index.rows()

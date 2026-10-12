@@ -1,4 +1,4 @@
-"""Track 5, slice 2 — soak: 10k seeded in chunks, recall p99 vs size, rebuild cheap."""
+"""Track 5, slices 1+2 — growth and soak: single-write p99, 10k seeded in chunks, recall p99 vs size, rebuild cheap."""
 
 import time
 
@@ -8,6 +8,7 @@ from agent_memory.core.recall import Recall
 SOAK_N = 10_000
 CHUNK = 500
 CHECKPOINTS = (1_000, 5_000, 10_000)
+BUDGET_RECORD_P99_MS = 500.0
 BUDGET_RECALL_P99_MS = {1_000: 100.0, 5_000: 200.0, 10_000: 300.0}
 BUDGET_REBUILD_S = 60.0
 PROBES_PER_CHECKPOINT = 20
@@ -49,8 +50,23 @@ def _probe(store, seeded):
 
 @pytest.mark.stress
 def test_soak_recall_p99_vs_size_and_rebuild(store):
+    record_lat = []
+    for index in range(CHUNK):
+        started = time.perf_counter()
+        store.record(
+            type="fact",
+            name=f"soak-{index:05d}",
+            abstract=f"topic-{index % 50} detail-{index} marker-s{index}",
+            body=f"Notes on topic, detail {index}.",
+        )
+        record_lat.append((time.perf_counter() - started) * 1000.0)
+    record_p99 = _percentile(record_lat, 0.99)
+    assert record_p99 <= BUDGET_RECORD_P99_MS, (
+        f"single-write p99: {record_p99:.1f}ms over {BUDGET_RECORD_P99_MS}ms"
+    )
+
     p99_by_size = {}
-    seeded = 0
+    seeded = CHUNK
     while seeded < SOAK_N:
         _seed_chunk(store, seeded, CHUNK)
         seeded += CHUNK
@@ -79,4 +95,7 @@ def test_soak_recall_p99_vs_size_and_rebuild(store):
         for query in sample
     }
     assert after == before
-    print(f"\nrecall p99 vs size (ms): {p99_by_size}, rebuild 10k: {elapsed:.1f}s")
+    print(
+        f"\nsingle-write p99 (ms): {record_p99:.1f}, "
+        f"recall p99 vs size (ms): {p99_by_size}, rebuild 10k: {elapsed:.1f}s"
+    )

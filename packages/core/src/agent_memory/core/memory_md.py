@@ -7,6 +7,8 @@ which rank by relevance as well as weight; the two tracks divide labor instead o
 from __future__ import annotations
 
 import dataclasses
+import sqlite3
+from collections.abc import Iterable
 
 from .config import Config
 from .paths import StoreLayout
@@ -36,8 +38,7 @@ def render_entries(entries: list[Entry], config: Config) -> str:
         for entry in entries
         if entry.active and entry.weight >= config.recall.memory_md_weight_floor
     ]
-    eligible.sort(key=lambda entry: (-entry.weight, entry.updated, entry.name), reverse=False)
-    eligible.sort(key=lambda entry: entry.weight, reverse=True)
+    eligible.sort(key=lambda entry: (-entry.weight, entry.updated, entry.name))
 
     header = config.memory_md.header + "\n\n"
     lines: list[str] = []
@@ -64,7 +65,7 @@ def write_entries(layout: StoreLayout, entries: list[Entry]) -> str:
     return text
 
 
-def rows_to_entries(rows) -> list[Entry]:
+def rows_to_entries(rows: Iterable[sqlite3.Row]) -> list[Entry]:
     return [
         Entry(
             name=str(row["name"]),
