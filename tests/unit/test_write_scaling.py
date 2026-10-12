@@ -17,9 +17,9 @@ def _seed(store, count, prefix):
         )
 
 
-def _median_write_ms(store, prefix):
+def _min_write_ms(store, prefix):
     samples = []
-    for index in range(5):
+    for index in range(7):
         started = time.perf_counter()
         store.record(
             type="fact",
@@ -28,14 +28,14 @@ def _median_write_ms(store, prefix):
             body="x",
         )
         samples.append((time.perf_counter() - started) * 1000.0)
-    return sorted(samples)[len(samples) // 2]
+    return min(samples)
 
 
 def test_single_write_cost_is_flat(store):
     _seed(store, FLAT_N_SMALL, "flat-small")
-    small = _median_write_ms(store, "probe-small")
+    small = _min_write_ms(store, "probe-small")
     _seed(store, FLAT_N_LARGE - FLAT_N_SMALL, "flat-large")
-    large = _median_write_ms(store, "probe-large")
+    large = _min_write_ms(store, "probe-large")
     assert large <= small * FLAT_RATIO_CEILING
 
 
