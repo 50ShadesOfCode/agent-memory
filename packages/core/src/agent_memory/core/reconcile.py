@@ -15,7 +15,6 @@ from .config import Config
 from .errors import FieldError
 from .paths import StoreLayout
 from .recall import Recall
-from .record import MemoryRecord
 from .schema import MemorySchema
 from .sessions import Message, Pointer, parse_pointer, render_pointer
 from .store import Store
@@ -248,7 +247,3 @@ def _provenance(raw: object, sheet: Sheet) -> list[Pointer]:
             if parsed:
                 pointers.append(parsed)
     return pointers or [sheet.pointer]
-
-
-def profile_lines(records: list[MemoryRecord]) -> tuple[str, ...]:
-    return tuple(record.abstract for record in records if record.type == TYPE_PROFILE)
