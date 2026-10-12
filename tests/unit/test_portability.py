@@ -82,3 +82,20 @@ def test_import_allows_valid_relative_paths(target_store):
     }
     written = portability.import_into(target_store, payload)
     assert written == 1
+
+
+def test_import_refuses_config_overwrite(target_store):
+    payload = {
+        "format": portability.FORMAT_VERSION,
+        "files": [{"path": "config.toml", "text": "[executor]\n"}],
+    }
+    with pytest.raises(ValueError, match="non-memory file"):
+        portability.import_into(target_store, payload)
+
+
+def test_import_rejects_malformed_entries(target_store):
+    for bad in (["oops"], [{"path": "fact/x.md"}], [{"text": "x"}]):
+        with pytest.raises(ValueError, match="malformed export entry"):
+            portability.import_into(
+                target_store, {"format": portability.FORMAT_VERSION, "files": bad}
+            )

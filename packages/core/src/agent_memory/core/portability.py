@@ -45,11 +45,17 @@ def import_into(store: Store, payload: dict[str, object]) -> int:
     files = payload.get(KEY_FILES)
     written = 0
     for entry in files if isinstance(files, list) else []:
-        target = (store.root / str(entry[KEY_PATH])).resolve()
+        if not isinstance(entry, dict) or not isinstance(
+            entry.get(KEY_PATH), str
+        ) or not isinstance(entry.get(KEY_TEXT), str):
+            raise ValueError(f"malformed export entry: {entry!r}"[:200])
+        target = (store.root / entry[KEY_PATH]).resolve()
         if not target.is_relative_to(store.root.resolve()):
             raise ValueError(f"path traversal refused: {entry[KEY_PATH]}")
+        if pathlib.Path(entry[KEY_PATH]).suffix not in (MEMORY_SUFFIX, SESSION_SUFFIX):
+            raise ValueError(f"refused non-memory file: {entry[KEY_PATH]}")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(str(entry[KEY_TEXT]), encoding="utf-8")
+        target.write_text(entry[KEY_TEXT], encoding="utf-8")
         written += 1
     store.rebuild_index()
     return written
