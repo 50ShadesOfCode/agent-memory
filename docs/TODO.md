@@ -1,5 +1,10 @@
 # Follow-ups
 
+## Read-path hardening follow-up
+
+- `Store.records()` skips undecodable truth files while diagnostics report them;
+  pick one rule (surface, skip, or fail loud) for both paths.
+
 ## Sleep-commit scope follow-up
 
 - Sleep versions the whole store root (`git add -A`), including raw archived
