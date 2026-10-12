@@ -574,8 +574,8 @@ class Manage:
             overlap = _similarity_sets(tokened[first_index], tokened[second_index])
             if overlap < self._config.manage.merge_proposal_similarity:
                 continue
-            first, second = tokened[first_index], tokened[second_index]
-            if first <= second or second <= first:
+            words_a, words_b = tokened[first_index], tokened[second_index]
+            if words_a <= words_b or words_b <= words_a:
                 kind = PROPOSAL_SUPERSEDE
             elif left.type == right.type:
                 kind = PROPOSAL_MERGE
