@@ -76,9 +76,19 @@ class VectorIndex:
         self, query: str, pool: int, eligible_names: set[str] | None = None
     ) -> list[Candidate]:
         query_vector = self._embedder.embed_query(query)
-        rows = self._connection.execute(
-            "SELECT name, kind, anchor, heading, embedding FROM vector_chunks"
-        ).fetchall()
+        if eligible_names is not None:
+            if not eligible_names:
+                return []
+            placeholders = ",".join("?" for _ in eligible_names)
+            rows = self._connection.execute(
+                "SELECT name, kind, anchor, heading, embedding FROM vector_chunks "
+                f"WHERE name IN ({placeholders})",
+                tuple(eligible_names),
+            ).fetchall()
+        else:
+            rows = self._connection.execute(
+                "SELECT name, kind, anchor, heading, embedding FROM vector_chunks"
+            ).fetchall()
         candidates = [
             Candidate(
                 name=str(row["name"]),
@@ -88,7 +98,6 @@ class VectorIndex:
                 relevance=_cosine(query_vector, _unpack(row["embedding"])),
             )
             for row in rows
-            if eligible_names is None or str(row["name"]) in eligible_names
         ]
         candidates.sort(
             key=lambda item: (-item.relevance, item.name, item.kind, item.anchor, item.heading)

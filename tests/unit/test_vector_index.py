@@ -233,6 +233,19 @@ def test_vector_match_restores_chunk_metadata(tmp_path, clock):
     assert {(item.name, item.kind, item.anchor, item.heading) for item in candidates}
 
 
+def test_vector_match_filters_names_in_sql(tmp_path, clock):
+    store, embedder = _vector_store(tmp_path / "store", clock)
+    store.init()
+    store.record(abstract="Automobile upkeep schedule", type="decision", name="car-a")
+    store.record(abstract="Automobile service plan", type="decision", name="car-b")
+    with Database(store.layout).connect() as connection:
+        index = VectorIndex(connection, embedder, "fake/v1")
+        assert {item.name for item in index.match("service the car", 10)} >= {"car-a", "car-b"}
+        limited = index.match("service the car", 10, eligible_names={"car-a"})
+        assert {item.name for item in limited} == {"car-a"}
+        assert index.match("service the car", 10, eligible_names=set()) == []
+
+
 def test_hybrid_recall_excludes_raw_corpus(tmp_path, clock):
     store, _ = _vector_store(tmp_path / "store", clock)
     store.init()
