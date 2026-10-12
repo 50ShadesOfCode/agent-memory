@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
+import tempfile
 
 from . import sessions
 from .clock import Clock
@@ -30,13 +32,18 @@ class Archive:
         ordinal = 0
         original = path
         while True:
+            with tempfile.NamedTemporaryFile(dir=folder, delete=False) as staged:
+                staged.write(payload.encode("utf-8"))
+                staged.flush()
+                os.fsync(staged.fileno())
             try:
-                with path.open("x", encoding="utf-8") as handle:
-                    handle.write(payload)
+                os.link(staged.name, path)
                 return path
             except FileExistsError:
                 ordinal += 1
                 path = original.with_name(f"{original.stem}-{ordinal}{original.suffix}")
+            finally:
+                os.unlink(staged.name, missing_ok=True)
 
     def provenance_of(self, name: str) -> list[pathlib.Path]:
         folder = self._layout.provenance / name
