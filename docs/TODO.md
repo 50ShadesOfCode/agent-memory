@@ -28,6 +28,46 @@ fixable ones landed, one residual stays documented.
   extracted text changes shape between reads, positions shift and items are
   missed or duplicated with no content check. No cheap fix — a content-aware
   watermark is a core change. Revisit if observed in traces.
+- Store-side backfill sweep: startup backfill only recovers sessions OpenCode
+  can still reach through the plugin; a session born, killed, and never
+  reopened stays unarchived until then. Narrow the residual gap with a sweep
+  that runs on any `mem` start (or distill): walk `archive/sessions/` for
+  open watermark pointers whose session history is reachable and archive the
+  remainder, host events not required.
+
+## Retrieval follow-ups
+
+Ideas borrowed from a comparison with AEndrix03/Graft (2026-10); keep the
+governance invariants that Graft lacks.
+
+- `recall --explain`: expose the per-signal breakdown behind the combined
+  score (`relevance * weight * recency` in `core/recall.py`), plus BM25 vs
+  vector contribution when fusion is on. Today `--json` carries one opaque
+  number; the breakdown is also the data an external debugger needs.
+- Confidence gate on recall: label the answer "weak — reformulate the
+  query" when the top candidate is far from the request. Build the gate over
+  abstract + body, not title only — the failure mode that makes Graft's gate
+  miss answers living in the body.
+
+## Manage follow-ups
+
+- Maintenance candidate taxonomy in sleep reports: enumerate the kinds of
+  problems the pass looks for (near-duplicate, possible supersession,
+  contradiction, isolated low-value, link fragmentation, …) with
+  deterministic candidate ids, so a candidate stays stable across passes and
+  a decision binds to the same entity.
+- Link proposals: when sleep finds memories that look related, file a T1
+  proposal to add the `links` edge instead of writing it silently. Keeps the
+  explicit-links commitment and the human-in-the-loop governance.
+
+## CLI follow-ups
+
+- Lightweight `mem status`: one cheap call returning store size, index
+  health, pending-proposal count, distillation backlog size. Distinct from
+  `doctor`, which performs live reasoner requests and stays heavyweight.
+- Named profiles: first-class store profiles (`work`, `personal`,
+  project-scoped) selectable by name instead of only exporting an absolute
+  `AGENT_MEMORY_STORE` path per shell.
 
 ## Muse Code follow-ups
 
