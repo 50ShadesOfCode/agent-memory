@@ -134,7 +134,8 @@ def append(
 def count(path: pathlib.Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for line in path.read_text(encoding="utf-8").split("\n") if line.strip())
+    with path.open(encoding="utf-8") as handle:
+        return sum(1 for line in handle if line.strip())
 
 
 def read(layout: StoreLayout, session: str) -> list[Message]:
