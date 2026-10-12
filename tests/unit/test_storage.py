@@ -208,25 +208,22 @@ def test_find_rejects_a_parseable_but_invalid_file_loudly(store):
     assert "Not A Slug" not in [record.name for record in store.records()]
 
 
-def test_read_serializes_access_log_append(seeded, monkeypatch):
-    import contextlib
+def test_read_logs_telemetry_without_writer_lock(seeded):
+    import threading
 
-    import agent_memory.core.store as store_module
+    from agent_memory.core.locking import store_lock
 
-    held = []
-    real = store_module.store_lock
-
-    @contextlib.contextmanager
-    def recording(layout):
-        held.append(True)
-        with real(layout):
-            yield
-
-    monkeypatch.setattr(store_module, "store_lock", recording)
-
-    seeded.read("file-truth-invariant", level="abstract")
-
-    assert held == [True]
+    done = threading.Event()
+    with store_lock(seeded.layout):
+        worker = threading.Thread(
+            target=lambda: (
+                seeded.read("file-truth-invariant", level="abstract"),
+                done.set(),
+            )
+        )
+        worker.start()
+        assert done.wait(timeout=10), "read telemetry blocked behind the writer lock"
+        worker.join(timeout=10)
 
 
 def test_move_preserves_identity_provenance_and_links(store):

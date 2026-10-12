@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "79befff1-b122-4239-a327-efc60fe59e86",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/kakty/Projects/agent-memory/.archify/architecture-agent-memory-runtime-20261012-144936/candidate.json",
+  "output": "/Users/kakty/Projects/agent-memory/.archify/architecture-agent-memory-runtime-20261012-144936/agent-memory-runtime.html",
+  "specification": {
+    "sha256": "c58ab91156d60a24c7a4df705f44829b5cf7510d18009a9b28b7402ba438904a",
+    "bytes": 10302
+  },
+  "artifact": {
+    "sha256": "28e18ebf5585bbea13362c36c1dbea04839402b50e313f56b04bcc32e0c5ace6",
+    "bytes": 776196
+  }
+}

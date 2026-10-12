@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "agent-memory — runtime architecture",
+    "output": ".archify/architecture-agent-memory-runtime-20261012-144936/agent-memory-runtime.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/50ShadesOfCode/agent-memory.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "2462f65dc19bed28a081a3038ad1cebcadf62f0a"
+    }
+  },
+  "components": [
+    {
+      "id": "hosts",
+      "type": "external",
+      "label": "Agent hosts",
+      "sublabel": "Claude Code · Codex · Muse",
+      "pos": [40, 60],
+      "size": [180, 64],
+      "sources": [
+        { "path": "packages/adapters/src/agent_memory/adapters/moments.py", "line": 9, "end_line": 12, "label": "host identities" },
+        { "path": "README.md", "line": 16, "end_line": 20, "label": "one shared store" }
+      ]
+    },
+    {
+      "id": "hook",
+      "type": "backend",
+      "label": "Hook adapter",
+      "sublabel": "capture · trigger · inject",
+      "pos": [350, 60],
+      "size": [160, 64],
+      "tag": "mem-hook, exits 0",
+      "sources": [
+        { "path": "packages/adapters/src/agent_memory/adapters/hook_entry.py", "line": 112, "end_line": 122, "label": "inject or boundary" },
+        { "path": "packages/adapters/src/agent_memory/adapters/capture.py", "line": 37, "end_line": 50, "label": "capture at boundary" }
+      ]
+    },
+    {
+      "id": "distill",
+      "type": "backend",
+      "label": "Distillation",
+      "sublabel": "async at boundaries",
+      "pos": [650, 60],
+      "size": [170, 64],
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/distill.py", "line": 56, "end_line": 107, "label": "batch, repair, watermark" },
+        { "path": "packages/adapters/src/agent_memory/adapters/hook_entry.py", "line": 167, "end_line": 191, "label": "detached launch" }
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "Core write pipeline",
+      "sublabel": "validate → persist → project",
+      "pos": [950, 60],
+      "size": [170, 64],
+      "tag": "single flock",
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/store.py", "line": 129, "end_line": 159, "label": "one lock, one projection" }
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI + MCP entry",
+      "sublabel": "mem + mem-mcp, same core calls",
+      "pos": [45, 210],
+      "size": [170, 60],
+      "sources": [
+        { "path": "packages/cli/src/agent_memory/cli/main.py", "line": 39, "end_line": 61, "label": "mem CLI" },
+        { "path": "packages/mcp/src/agent_memory/mcp/server.py", "line": 75, "end_line": 97, "label": "stdio MCP router" }
+      ]
+    },
+    {
+      "id": "archive",
+      "type": "database",
+      "label": "Archive",
+      "sublabel": "raw sessions · provenance",
+      "pos": [350, 210],
+      "size": [160, 60],
+      "tag": "append-only",
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/archive.py", "line": 45, "end_line": 45, "label": "append_session" }
+      ]
+    },
+    {
+      "id": "reasoner",
+      "type": "external",
+      "label": "Reasoner",
+      "sublabel": "host login or endpoint",
+      "pos": [650, 210],
+      "size": [170, 60],
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/agentic.py", "line": 43, "end_line": 79, "label": "negotiate via ask()" },
+        { "path": "packages/core/src/agent_memory/core/reasoning.py", "line": 37, "end_line": 38, "label": "reasoner protocol" }
+      ]
+    },
+    {
+      "id": "truth",
+      "type": "database",
+      "label": "Markdown store",
+      "sublabel": "one file, one memory",
+      "pos": [950, 210],
+      "size": [160, 60],
+      "tag": "source of truth",
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/store.py", "line": 190, "end_line": 212, "label": "file placement + write" },
+        { "path": "README.md", "line": 84, "end_line": 97, "label": "store layout" }
+      ]
+    },
+    {
+      "id": "recall",
+      "type": "backend",
+      "label": "Recall",
+      "sublabel": "ranked paths, not text",
+      "pos": [45, 355],
+      "size": [170, 60],
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/recall.py", "line": 83, "end_line": 138, "label": "eligibility, fusion, rank" }
+      ]
+    },
+    {
+      "id": "manage",
+      "type": "backend",
+      "label": "Manage (sleep)",
+      "sublabel": "sleep-time consolidation",
+      "pos": [760, 355],
+      "size": [170, 60],
+      "tag": "delete = proposal only",
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/manage.py", "line": 131, "end_line": 157, "label": "sleep pass" },
+        { "path": "packages/core/src/agent_memory/core/manage.py", "line": 159, "end_line": 198, "label": "verdicts + per-kind caps" }
+      ]
+    },
+    {
+      "id": "index",
+      "type": "database",
+      "label": "SQLite index",
+      "sublabel": "FTS5 + manifest + access log",
+      "pos": [950, 355],
+      "size": [160, 60],
+      "tag": "rebuildable cache",
+      "sources": [
+        { "path": "packages/core/src/agent_memory/core/database.py", "line": 46, "end_line": 55, "label": "FTS5 surfaces" },
+        { "path": "packages/core/src/agent_memory/core/indexer.py", "line": 44, "end_line": 65, "label": "incremental projection" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "Write chokepoint — flock + frontmatter validation",
+      "wraps": ["core"],
+      "pad": 14
+    },
+    {
+      "kind": "security-group",
+      "label": "Model access — host login or opted-in endpoint",
+      "wraps": ["reasoner"],
+      "pad": 14
+    }
+  ],
+  "connections": [
+    {
+      "id": "e-hosts-hook",
+      "from": "hosts",
+      "to": "hook",
+      "label": "lifecycle hooks",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-hook-distill",
+      "from": "hook",
+      "to": "distill",
+      "label": "launch detached",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-distill-core",
+      "from": "distill",
+      "to": "core",
+      "label": "record specs",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-core-truth",
+      "from": "core",
+      "to": "truth",
+      "label": "write .md",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-truth-index",
+      "from": "truth",
+      "to": "index",
+      "label": "projected",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-hook-archive",
+      "from": "hook",
+      "to": "archive",
+      "label": "raw copy",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-distill-reasoner",
+      "from": "distill",
+      "to": "reasoner",
+      "label": "verdicts",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-hosts-cli",
+      "from": "hosts",
+      "to": "cli",
+      "label": "shell/MCP",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-cli-recall",
+      "from": "cli",
+      "to": "recall",
+      "label": "recall",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-recall-index",
+      "from": "recall",
+      "to": "index",
+      "label": "BM25 + vector",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [[130, 445], [1030, 445]]
+    },
+    {
+      "id": "e-recall-truth",
+      "from": "recall",
+      "to": "truth",
+      "label": "hit = path",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [[250, 385], [250, 475], [1170, 475], [1170, 240], [1110, 240]]
+    },
+    {
+      "id": "e-manage-core",
+      "from": "manage",
+      "to": "core",
+      "label": "sleep pass, same path"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Write path — one pipeline for every writer",
+      "items": [
+        "Agent, hook, and sleep writes all pass the same validate → persist → project pipeline",
+        "A batch rejects only the bad item; a failure restores files and re-projects",
+        "Projection touches only the files a write changed — cost does not grow with store size"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Three read tracks",
+      "items": [
+        "MEMORY.md is injected as a byte prefix at session start — no tool call, cannot miss",
+        "BM25 over the FTS5 index, with an optional vector plugin fused in by reciprocal-rank fusion",
+        "The plain directory tree stays reachable with ls and grep when both fail",
+        "Recall answers with paths, never pasted text; reads never mutate Markdown truth"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Distillation at conversation boundaries",
+      "items": [
+        "The full transcript is archived before anything is distilled — missed never means lost",
+        "Runs detached so the host turn ends without waiting on reasoning",
+        "Failed rounds leave the archived backlog eligible for retry; a watermark prevents re-reads"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Sleep & Manage — the M layer",
+      "items": [
+        "T0 rule-only actions (dates, weight, links, grouping) apply immediately",
+        "T1 verdicts come from the reasoner, capped per kind per sleep",
+        "Deletion only ever arrives as a proposal until the owner runs mem decide",
+        "One dream report and one git commit per sleep"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust & safety",
+      "items": [
+        "Hooks fail silent: every path exits 0; trouble goes to the store's own redacted log",
+        "Frontmatter validation rejects malformed or out-of-store writes at the chokepoint",
+        "Recalled content is data, never instructions; the reasoning edge is the only network touch"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Cache, not truth",
+      "items": [
+        "rm -rf .index/ && mem rebuild loses zero knowledge — enforced by a test",
+        "Usage stats live in the index access log; weight settles back at sleep",
+        "Writers serialize through one flock on the store"
+      ]
+    }
+  ]
+}

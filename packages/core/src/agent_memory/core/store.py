@@ -793,7 +793,9 @@ class Store:
         except OSError:
             return True
         current = {
-            line[3:].split("]", 1)[0] for line in lines if line.startswith("- [")
+            line[len(memory_md.LINE_PREFIX):].split("]", 1)[0]
+            for line in lines
+            if line.startswith(memory_md.LINE_PREFIX)
         }
         floor = self.config.recall.memory_md_weight_floor
         for path in paths:

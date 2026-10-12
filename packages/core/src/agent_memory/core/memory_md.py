@@ -14,6 +14,9 @@ from .config import Config
 from .paths import StoreLayout
 from .record import MemoryRecord
 
+LINE_PREFIX = "- ["
+"""How an injected index line opens; the store parses it back on the skip check."""
+
 
 @dataclasses.dataclass(frozen=True)
 class Entry:
@@ -46,7 +49,7 @@ def render_entries(entries: list[Entry], config: Config) -> str:
     for entry in eligible:
         if len(lines) >= config.memory_md.max_lines:
             break
-        line = f"- [{entry.name}]({entry.location}) — {entry.abstract}\n"
+        line = f"{LINE_PREFIX}{entry.name}]({entry.location}) — {entry.abstract}\n"
         cost = len(line.encode("utf-8"))
         if used + cost > config.memory_md.budget_bytes:
             break

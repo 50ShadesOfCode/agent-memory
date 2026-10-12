@@ -15,6 +15,7 @@ KEY_VERSION = "format"
 KEY_FILES = "files"
 KEY_PATH = "path"
 KEY_TEXT = "text"
+MAX_MALFORMED_PREVIEW = 200
 
 
 def export_store(store: Store, include_archive: bool = True) -> dict[str, object]:
@@ -48,7 +49,9 @@ def import_into(store: Store, payload: dict[str, object]) -> int:
         if not isinstance(entry, dict) or not isinstance(
             entry.get(KEY_PATH), str
         ) or not isinstance(entry.get(KEY_TEXT), str):
-            raise ValueError(f"malformed export entry: {entry!r}"[:200])
+            raise ValueError(
+                f"malformed export entry: {entry!r}"[:MAX_MALFORMED_PREVIEW]
+            )
         target = (store.root / entry[KEY_PATH]).resolve()
         if not target.is_relative_to(store.root.resolve()):
             raise ValueError(f"path traversal refused: {entry[KEY_PATH]}")
