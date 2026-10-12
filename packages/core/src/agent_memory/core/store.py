@@ -769,10 +769,37 @@ class Store:
                 relatives.append(relative)
         report = self._indexer.sync_paths(relatives)
         with self._database.connect() as connection:
-            memory_md.write_entries(
-                self.layout, memory_md.rows_to_entries(SearchIndex(connection).rows())
-            )
+            if self._memory_index_stale(paths):
+                memory_md.write_entries(
+                    self.layout, memory_md.rows_to_entries(SearchIndex(connection).rows())
+                )
         return report
+
+    def _memory_index_stale(self, paths: list[pathlib.Path]) -> bool:
+        """The injected index only carries above-floor lines. A write that neither
+        adds one nor disturbs an existing line leaves the file untouched."""
+        try:
+            lines = self.layout.memory_index.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return True
+        current = {
+            line[3:].split("]", 1)[0] for line in lines if line.startswith("- [")
+        }
+        floor = self.config.recall.memory_md_weight_floor
+        for path in paths:
+            if path is None or self.layout.type_of(path) is None:
+                continue
+            try:
+                record = self._at(path)
+            except ValidationError:
+                return True
+            if record is None:
+                return True
+            if record.is_active() and record.weight >= floor:
+                return True
+            if record.name in current:
+                return True
+        return False
 
     def _log_access(self, entries: list[AccessEntry]) -> None:
         with store_lock(self.layout), self._database.connect() as connection:

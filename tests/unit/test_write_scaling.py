@@ -75,3 +75,15 @@ def test_out_of_band_edit_visible_only_after_sync(store):
     assert "changed detail" not in store.layout.memory_index.read_text(encoding="utf-8")
     store.sync_index()
     assert "changed detail" in store.layout.memory_index.read_text(encoding="utf-8")
+
+
+def test_below_floor_write_leaves_injected_index_untouched(store):
+    import os
+
+    store.record(type="fact", name="heavy", abstract="heavy detail", body="x")
+    index = store.layout.memory_index
+    assert "heavy" in index.read_text(encoding="utf-8")
+    before = os.stat(index).st_mtime_ns
+    store.record(type="fact", name="light", abstract="light detail", body="x", weight=0.1)
+    assert os.stat(index).st_mtime_ns == before
+    assert store.find("light") is not None
