@@ -551,27 +551,44 @@ class Manage:
         """Two entries saying one thing: supersede when one already holds the other, merge
         when each holds something the other lacks and one file could hold both."""
         active = [record for record in records if record.is_active()]
+        tokened = [_tokens(record.abstract) for record in active]
+        by_token: dict[str, list[int]] = {}
+        for index, words in enumerate(tokened):
+            for word in words:
+                by_token.setdefault(word, []).append(index)
+        pairs: set[tuple[int, int]] = set()
+        if self._config.manage.merge_proposal_similarity <= 0:
+            pairs = {
+                (first, second)
+                for first in range(len(active))
+                for second in range(first + 1, len(active))
+            }
+        else:
+            for indices in by_token.values():
+                for position, first in enumerate(indices):
+                    for second in indices[position + 1 :]:
+                        pairs.add((first, second))
         proposals: list[Proposal] = []
-        for index, left in enumerate(active):
-            for right in active[index + 1 :]:
-                overlap = _similarity(left, right)
-                if overlap < self._config.manage.merge_proposal_similarity:
-                    continue
-                first, second = _tokens(left.abstract), _tokens(right.abstract)
-                if first <= second or second <= first:
-                    kind = PROPOSAL_SUPERSEDE
-                elif left.type == right.type:
-                    kind = PROPOSAL_MERGE
-                else:
-                    continue
-                proposals.append(
-                    Proposal(
-                        kind=kind,
-                        targets=(left.name, right.name),
-                        reason="abstracts overlap above the proposal threshold",
-                        evidence=f"similarity={overlap:.2f}",
-                    )
+        for first_index, second_index in sorted(pairs):
+            left, right = active[first_index], active[second_index]
+            overlap = _similarity_sets(tokened[first_index], tokened[second_index])
+            if overlap < self._config.manage.merge_proposal_similarity:
+                continue
+            first, second = tokened[first_index], tokened[second_index]
+            if first <= second or second <= first:
+                kind = PROPOSAL_SUPERSEDE
+            elif left.type == right.type:
+                kind = PROPOSAL_MERGE
+            else:
+                continue
+            proposals.append(
+                Proposal(
+                    kind=kind,
+                    targets=(left.name, right.name),
+                    reason="abstracts overlap above the proposal threshold",
+                    evidence=f"similarity={overlap:.2f}",
                 )
+            )
         return proposals
 
     def _propose_splits(self, records: list[MemoryRecord]) -> list[Proposal]:
@@ -721,9 +738,7 @@ def _tokens(text: str) -> set[str]:
     return {word for word in _WORDS.findall(text.lower()) if word not in _STOPWORDS}
 
 
-def _similarity(left: MemoryRecord, right: MemoryRecord) -> float:
-    first = _tokens(left.abstract)
-    second = _tokens(right.abstract)
+def _similarity_sets(first: set[str], second: set[str]) -> float:
     if not first or not second:
         return 0.0
     return len(first & second) / len(first | second)
