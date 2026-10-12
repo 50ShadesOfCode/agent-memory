@@ -257,11 +257,14 @@ class Manage:
         entries = [self._entry(name) for name in proposal.targets]
         keeper = max(entries, key=lambda record: (len(record.body), record.created, record.name))
         name = keeper.name + MERGED_SUFFIX
-        if self._store.find(name) is not None:
+        names = [record.name for record in entries]
+        try:
+            merged = self._store.merge(names, verdict.abstract, verdict.body, name=name)
+        except ValidationError as error:
+            if not any("already exists" in item.reason for item in error.errors):
+                raise
             name += "-" + self._clock.stamp().lower()
-        merged = self._store.merge(
-            [record.name for record in entries], verdict.abstract, verdict.body, name=name
-        )
+            merged = self._store.merge(names, verdict.abstract, verdict.body, name=name)
         return f"merged into {merged.name}"
 
     def _supersede(self, proposal: Proposal) -> str:

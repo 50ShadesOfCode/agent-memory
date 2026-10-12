@@ -664,3 +664,20 @@ def test_group_merge_preserves_identity_on_add_only_schemas(store):
         "apple-one.md",
         "apple-two.md",
     ]
+
+
+def test_crashed_merge_retries_into_base_name(store):
+    from agent_memory.core.manage import Manage, Proposal
+    from agent_memory.core.reasoning import Verdict
+
+    store.record(type="fact", name="alpha", abstract="a1", body="long body here")
+    store.record(type="fact", name="beta", abstract="b1", body="y")
+    store.record(type="fact", name="alpha-merged", abstract="Combined", body="Combined body")
+    proposal = Proposal(kind="merge", targets=("alpha", "beta"), reason="r")
+    verdict = Verdict(
+        proposal_id=proposal.id, accept=True, abstract="Combined", body="Combined body"
+    )
+    assert Manage(store)._merge(proposal, verdict) == "merged into alpha-merged"
+    assert not store.find("alpha").is_active()
+    assert not store.find("beta").is_active()
+    assert store.find("alpha-merged").is_active()
