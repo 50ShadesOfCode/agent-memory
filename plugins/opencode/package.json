@@ -1,6 +1,6 @@
 {
   "name": "agent-memory-opencode",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "agent-memory capture plugin for OpenCode: prompt injection, layered capture, distill command",
   "type": "module",
   "exports": {

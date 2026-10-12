@@ -6,6 +6,35 @@ version heading on release.
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-12
+
+Concurrency and crash-safety hardening from a full-repo audit: WAL with busy
+timeout, write-intent replay, lock-free telemetry, duplicate reporting, and
+a hardened flat-write gate.
+
+### Fixed
+
+- SQLite runs in WAL mode with a 5 s busy timeout, so parallel readers no
+  longer hit `database is locked`; `rebuild` drops WAL siblings with the index.
+- Crash safety: a write-intent file replays unprojected files on the next
+  projection, provenance writes are atomic (temp + fsync + link), session
+  appends heal torn tails and fsync, and crashed merges retry into the base
+  name instead of stamping orphans.
+- Telemetry (recall/read/feedback access log) no longer takes the writer lock;
+  contention is covered by a dedicated test.
+- Same-name files across directories are reported as `duplicates` in sync
+  reports and `mem inspect` instead of persisting invisibly; hook transcripts
+  load only as real `.jsonl` files and hook session/host values pass as
+  `--flag=value` so hostile input cannot inject flags.
+- Secret scrubbing covers `sk-ant-`, `ghp_`/`ghs_`/`gho_`, `AKIA`, `xoxb-`,
+  and PEM private-key headers; CLI input-file failures report as validation
+  errors instead of tracebacks.
+- Overwrites that change content emit a `record_overwrite` tripwire observation
+  (no enforcement yet — evidence first).
+- Flaky flat-write gate now measures minimum-of-samples instead of median.
+
+## 0.2.0 — 2026-10-12
+
 ## 0.2.0 — 2026-10-12
 
 Benchmark tracks 1–3 and 5 done (track 4 deferred: free-tier quota blocks
