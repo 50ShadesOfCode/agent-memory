@@ -311,7 +311,7 @@ def _record(store: Store, args: argparse.Namespace) -> dict[str, object]:
 
 
 def _record_batch(store: Store, source: str) -> dict[str, object]:
-    text = sys.stdin.read() if source == STDIN_MARKER else pathlib.Path(source).read_text("utf-8")
+    text = sys.stdin.read() if source == STDIN_MARKER else _read_file("batch", source)
     specs: list[dict[str, object]] = []
     for number, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
@@ -548,7 +548,7 @@ def _proposals(store: Store, args: argparse.Namespace) -> dict[str, object]:
 
 def _decide(store: Store, args: argparse.Namespace) -> dict[str, object]:
     _refuse_agent_context("decide")
-    parts = json.loads(pathlib.Path(args.parts).read_text(encoding="utf-8")) if args.parts else []
+    parts = _read_json_parts(args.parts) if args.parts else []
     verdict = reasoning.parse(
         json.dumps(
             {
@@ -611,12 +611,28 @@ def _doctor(store: Store, args: argparse.Namespace) -> dict[str, object]:
     ).as_dict()
 
 
+def _read_json_parts(source: str) -> object:
+    try:
+        return json.loads(_read_file("parts", source))
+    except json.JSONDecodeError as error:
+        raise ValidationError(
+            [FieldError("parts", f"not valid JSON: {error.msg}")]
+        ) from error
+
+
 def _body(inline: str, from_file: str | None) -> str:
     if from_file == STDIN_MARKER:
         return sys.stdin.read()
     if from_file:
-        return pathlib.Path(from_file).read_text(encoding="utf-8")
+        return _read_file("body-file", from_file)
     return inline
+
+
+def _read_file(label: str, source: str) -> str:
+    try:
+        return pathlib.Path(source).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise ValidationError([FieldError(label, f"cannot read file: {error}")]) from error
 
 
 def _emit(payload: object, as_json: bool, stream=None) -> None:

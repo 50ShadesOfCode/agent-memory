@@ -566,3 +566,15 @@ def test_decide_refuses_executor_owned_sessions(cli, monkeypatch):
     payload = cli("decide", "whatever", "--accept", expect=EXIT_INVALID)
 
     assert payload["errors"][0]["field"] == "decide"
+
+
+def test_missing_input_files_report_validation_errors(cli, tmp_path):
+    missing = str(tmp_path / "missing.md")
+    payload = cli(
+        "record", "--type", "fact", "--abstract", "x", "--body-file", missing,
+        expect=EXIT_INVALID,
+    )
+    assert payload["code"] == "validation_error"
+    assert any(error["field"] == "body-file" for error in payload["errors"])
+    payload = cli("record", "--batch", missing, expect=EXIT_INVALID)
+    assert any(error["field"] == "batch" for error in payload["errors"])
