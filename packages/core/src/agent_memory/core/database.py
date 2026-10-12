@@ -100,6 +100,9 @@ class Database:
         self._layout.index_dir.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self._layout.index_db)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=5000")
+        connection.execute("PRAGMA synchronous=NORMAL")
         try:
             columns = connection.execute("PRAGMA table_info(records)").fetchall()
             if any(column["name"] == "status" for column in columns):

@@ -6,6 +6,7 @@ import threading
 import pytest
 from agent_memory.core import sessions
 from agent_memory.core.config import Config
+from agent_memory.core.database import Database
 from agent_memory.core.errors import MemoryStoreError
 from agent_memory.core.locking import store_lock
 from agent_memory.core.paths import StoreLayout
@@ -27,6 +28,15 @@ def test_store_lock_acquires_and_releases(tmp_path):
     assert entered
     # Lock file exists after first use
     assert layout.lock_file.exists()
+
+
+def test_connections_use_wal_with_busy_timeout(tmp_path):
+    layout = _layout(tmp_path)
+    with Database(layout).connect() as connection:
+        mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+        timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
+    assert mode.lower() == "wal"
+    assert timeout == 5000
 
 
 def test_store_lock_creates_state_dir_if_missing(tmp_path):
