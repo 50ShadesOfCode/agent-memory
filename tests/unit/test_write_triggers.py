@@ -377,3 +377,20 @@ def test_hook_failure_log_redacts_secrets(store):
     logged = (store.root / ".state" / hook_entry.LOG_FILENAME).read_text(encoding="utf-8")
     assert "sk-or-SUPER-SECRET-1" not in logged
     assert "[REDACTED]" in logged
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "sk-ant-" + "oGs4K9xR2mN7pQ8sT1uV3wX5yZ6aB8cD0eF2gH4",
+        "ghp_" + "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AB",
+        "AKIA" + "IOSFODNN7EXAMPLE",
+        "xoxb-" + "123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUv",
+        "-----BEGIN " + "PRIVATE KEY-----",
+    ],
+)
+def test_known_key_shapes_are_redacted(secret):
+    from agent_memory.core import redact
+
+    assert secret not in redact.redacted(f"leaked {secret} here")
+    assert "[REDACTED]" in redact.redacted(f"leaked {secret} here")

@@ -10,6 +10,11 @@ import re
 
 _PATTERNS = (
     re.compile(r"sk-or-[A-Za-z0-9_-]+"),
+    re.compile(r"sk-ant-[A-Za-z0-9_-]+"),
+    re.compile(r"gh[pous]_[A-Za-z0-9]+"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"xox[bpas]-[A-Za-z0-9-]+"),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(
         r"(?i)(bearer\s+|(?:api[_-]?key|token|password|secret)[\"']?\s*[=:]\s*[\"']?)"
         r"[^\s,\"']+"
