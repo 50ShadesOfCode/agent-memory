@@ -25,6 +25,7 @@ class IndexReport:
     removed: tuple[str, ...] = ()
     unreadable: tuple[str, ...] = ()
     dangling_links: tuple[tuple[str, str], ...] = ()
+    duplicates: tuple[str, ...] = ()
 
     def is_empty(self) -> bool:
         return not (self.reindexed or self.removed)
@@ -55,11 +56,13 @@ class Indexer:
                 assert self._embedder is not None
                 self._sync_vectors(connection, present, self._embedder)
             dangling = self._dangling_links(index)
+            duplicates = tuple(sorted(manifest.duplicated_names()))
         return IndexReport(
             reindexed=report.reindexed,
             removed=delta.removed,
             unreadable=report.unreadable,
             dangling_links=dangling,
+            duplicates=duplicates,
         )
 
     def sync_paths(self, relatives: list[str]) -> IndexReport:
@@ -90,11 +93,13 @@ class Indexer:
                 assert self._embedder is not None
                 self._sync_vector_paths(connection, {r for r in wanted if r in present})
             dangling = self._dangling_links(index)
+            duplicates = tuple(sorted(manifest.duplicated_names()))
         return IndexReport(
             reindexed=report.reindexed,
             removed=removed,
             unreadable=report.unreadable,
             dangling_links=dangling,
+            duplicates=duplicates,
         )
 
     def _index_touched(

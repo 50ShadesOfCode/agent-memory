@@ -57,5 +57,13 @@ class Manifest:
     def forget(self, path: str) -> None:
         self._connection.execute("DELETE FROM files WHERE path = ?", (path,))
 
+    def duplicated_names(self) -> list[str]:
+        return [
+            str(row["name"])
+            for row in self._connection.execute(
+                "SELECT name FROM files GROUP BY name HAVING COUNT(*) > 1"
+            ).fetchall()
+        ]
+
     def hash_file(self, path: pathlib.Path) -> str:
         return content_hash(path.read_text(encoding="utf-8"), self._prefix_length)

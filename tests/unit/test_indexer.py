@@ -99,3 +99,16 @@ def test_touched_projection_keeps_full_dangling_report(store):
     )
     store.record(type="fact", name="unrelated", abstract="unrelated", body="x")
     assert ("legacy", "not-written-yet") in store.sync_index().dangling_links
+
+
+def test_sync_report_names_duplicate_memories(store):
+    store.record(type="fact", name="dup", abstract="dup", body="x")
+    other = store.root / "fact" / "other"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "dup.md").write_text(
+        "---\nname: dup\ntype: fact\nabstract: dup\nproject: default\nsubject: dup\n"
+        'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+        "author: t\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    assert store.sync_index().duplicates == ("dup",)

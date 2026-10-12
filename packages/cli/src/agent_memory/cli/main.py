@@ -472,6 +472,7 @@ def _inspect(store: Store, args: argparse.Namespace) -> dict[str, object]:
         "total": len(records),
         "invalid": len(store.records(include_invalid=True)) - len(records),
         "dangling_links": [list(pair) for pair in report.dangling_links],
+        "duplicates": list(report.duplicates),
         "unreadable": list(report.unreadable),
         "config_fingerprint": store.config.fingerprint(),
         "recall_fingerprint": store.config.recall_fingerprint(),
