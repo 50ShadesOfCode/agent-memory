@@ -244,6 +244,16 @@ class Store:
             if pointer not in candidate.provenance:
                 candidate.provenance.append(pointer)
         self._reject_facts_dated_after_their_evidence(candidate)
+        if existing is not None:
+            overwritten = [
+                field
+                for field in ("abstract", "body", "links", "weight")
+                if getattr(candidate, field) != getattr(existing, field)
+            ]
+            if overwritten:
+                observation.emit(
+                    "record_overwrite", name=candidate.name, fields=overwritten
+                )
         changed_paths = {target}
         if moved_from is not None:
             changed_paths.add(moved_from)

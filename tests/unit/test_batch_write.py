@@ -344,3 +344,16 @@ def test_failed_batches_restore_all_canonical_changes(store, monkeypatch, failur
     assert {hit.name for hit in Recall(store).recall("orchid")} == {
         record.name for record in originals
     }
+
+
+def test_overwrite_emits_tripwire_event(store, tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("AGENT_MEMORY_OBSERVATION_DIR", str(tmp_path / "obs"))
+    store.record(type="fact", name="w", abstract="one", body="x")
+    store.record(type="fact", name="w", abstract="two", body="x")
+    lines = (tmp_path / "obs" / "tools.jsonl").read_text(encoding="utf-8").splitlines()
+    overwrites = [json.loads(line) for line in lines if '"record_overwrite"' in line]
+    assert len(overwrites) == 1
+    assert overwrites[0]["name"] == "w"
+    assert overwrites[0]["fields"] == ["abstract"]
