@@ -1,4 +1,5 @@
-"""Track 5, slices 1+2 — growth and soak: single-write p99, 10k seeded in chunks, recall p99 vs size, rebuild cheap."""
+"""Track 5, slices 1+2 — growth and soak: single-write p99, 10k in chunks,
+recall p99 vs size, rebuild cheap."""
 
 import time
 
