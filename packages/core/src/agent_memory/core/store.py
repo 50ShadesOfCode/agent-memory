@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import os
 import pathlib
 import tempfile
@@ -257,6 +258,7 @@ class Store:
             self._replace_file(target, payload)
             if moved_from is not None and moved_from != target:
                 moved_from.unlink(missing_ok=True)
+                self._note_dirty(moved_from)
             if predecessor is not None and predecessor.path is not None:
                 self._replace_file(predecessor.path, predecessor.to_text().encode("utf-8"))
         except Exception:
@@ -456,6 +458,7 @@ class Store:
             try:
                 self._replace_file(target, payload)
                 source.unlink()
+                self._note_dirty(source)
             except Exception:
                 target.unlink(missing_ok=True)
                 self._replace_file(source, previous)
@@ -569,6 +572,7 @@ class Store:
                 if record.is_active() or record.path is None:
                     continue
                 record.path.unlink(missing_ok=True)
+                self._note_dirty(record.path)
                 touched.append(record.path)
                 removed.append(record.name)
             self._project_paths(touched)
@@ -603,6 +607,7 @@ class Store:
         except Exception:
             if previous is None:
                 record.path.unlink(missing_ok=True)
+                self._note_dirty(record.path)
             else:
                 self._replace_file(record.path, previous)
             self._project()
@@ -621,6 +626,34 @@ class Store:
             os.replace(staged, path)
         finally:
             staged.unlink(missing_ok=True)
+        self._note_dirty(path)
+
+    def _note_dirty(self, path: pathlib.Path) -> None:
+        """Remember a truth file changed ahead of its projection.
+
+        A crash between the replace and the projection leaves the index behind
+        the tree; the next projection replays the intent file first, so the gap
+        heals instead of persisting.
+        """
+        if self.layout.type_of(path) is None:
+            return
+        relative = str(path.relative_to(self.root))
+        pending = self._take_intent(keep=True)
+        if relative not in pending:
+            pending.append(relative)
+            with open(self.layout.intent_file, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(pending))
+                handle.flush()
+                os.fsync(handle.fileno())
+
+    def _take_intent(self, keep: bool = False) -> list[str]:
+        try:
+            pending = json.loads(self.layout.intent_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pending = []
+        if not keep:
+            self.layout.intent_file.unlink(missing_ok=True)
+        return [item for item in pending if isinstance(item, str)]
 
     def _restore_files(self, snapshots: dict[pathlib.Path, bytes | None]) -> None:
         for path, previous in snapshots.items():
@@ -718,17 +751,22 @@ class Store:
     def _project(self) -> IndexReport:
         report = self._indexer.sync()
         memory_md.write(self.layout, self.records())
+        self.layout.intent_file.unlink(missing_ok=True)
         return report
 
     def _project_paths(self, paths: list[pathlib.Path]) -> IndexReport:
         """Reproject files a write touched. Full passes stay on explicit sync,
         rebuild and crash recovery, which remain the discovery path for changes
         made outside Store."""
+        pending = self._take_intent()
         relatives = [
             str(path.relative_to(self.root))
             for path in paths
             if path is not None and self.layout.type_of(path) is not None
         ]
+        for relative in pending:
+            if relative not in relatives:
+                relatives.append(relative)
         report = self._indexer.sync_paths(relatives)
         with self._database.connect() as connection:
             memory_md.write_entries(

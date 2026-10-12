@@ -15,6 +15,7 @@ INDEX_DIRNAME = ".index"
 STATE_DIRNAME = ".state"
 INDEX_DB_FILENAME = "index.db"
 LOCK_FILENAME = "store.lock"
+INTENT_FILENAME = "write-intent.json"
 MEMORY_SUFFIX = ".md"
 STAGED_PREFIX = ".staged-"
 
@@ -59,6 +60,10 @@ class StoreLayout:
     @property
     def lock_file(self) -> pathlib.Path:
         return self.state_dir / LOCK_FILENAME
+
+    @property
+    def intent_file(self) -> pathlib.Path:
+        return self.state_dir / INTENT_FILENAME
 
     @property
     def watermarks(self) -> pathlib.Path:

@@ -8,6 +8,7 @@ instructions. Batching removes the tax without changing what a memory is.
 import pytest
 from agent_memory.core.errors import NotFoundError, ValidationError
 from agent_memory.core.recall import Recall
+from agent_memory.core.search_index import SearchIndex
 
 SPECS = [
     {
@@ -120,6 +121,39 @@ def test_an_empty_batch_is_not_an_error(store):
     result = store.record_many([])
     assert result.written == []
     assert result.rejected == []
+
+
+def _indexed(store, name):
+    with store._database.connect() as connection:
+        return SearchIndex(connection).row(name) is not None
+
+
+def test_crash_intent_replays_unprojected_files_on_next_write(store):
+    stray = store.root / "fact" / "default" / "stray.md"
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_text(
+        "---\nname: stray\ntype: fact\nabstract: stray\nproject: default\nsubject: stray\n"
+        'created: "2026-01-01T00:00:00Z"\nupdated: "2026-01-01T00:00:00Z"\n'
+        "author: t\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    assert not _indexed(store, "stray")
+    store.layout.intent_file.write_text('["fact/default/stray.md"]', encoding="utf-8")
+    store.record(type="fact", name="other", abstract="other", body="x")
+    assert _indexed(store, "stray")
+    assert not store.layout.intent_file.exists()
+
+
+def test_clean_write_leaves_no_intent(store):
+    store.record(type="fact", name="clean", abstract="clean", body="x")
+    assert not store.layout.intent_file.exists()
+
+
+def test_corrupt_intent_is_dropped_not_fatal(store):
+    store.layout.intent_file.write_text("not json{", encoding="utf-8")
+    store.record(type="fact", name="after", abstract="after", body="x")
+    assert store.find("after") is not None
+    assert not store.layout.intent_file.exists()
 
 
 def test_a_batch_rejects_a_malformed_spec_rather_than_guessing(store):
