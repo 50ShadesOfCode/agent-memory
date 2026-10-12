@@ -88,18 +88,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             event[KEY_MUSE_DATA_HOME] = args.muse_data_home
         if args.muse_settings:
             event[KEY_MUSE_SETTINGS] = args.muse_settings
-            os.environ[MUSE_SETTINGS_ENV_VAR] = args.muse_settings
-        if args.muse_launcher:
-            os.environ[MUSE_LAUNCHER_ENV_VAR] = args.muse_launcher
-        if args.muse_binary:
-            os.environ[MUSE_BINARY_ENV_VAR] = args.muse_binary
+        scoped = {
+            var: value
+            for var, value in (
+                (MUSE_SETTINGS_ENV_VAR, args.muse_settings),
+                (MUSE_LAUNCHER_ENV_VAR, args.muse_launcher),
+                (MUSE_BINARY_ENV_VAR, args.muse_binary),
+            )
+            if value
+        }
         store_value = event.get("store")
         store = Store(
             str(store_value) if store_value else None,
             agent=str(event.get("agent") or "hook"),
         )
         _arm(store.config.write.hook_timeout_seconds)
-        response = handle(store, event)
+        previous = {
+            var: os.environ.get(var) for var in scoped
+        }
+        os.environ.update(scoped)
+        try:
+            response = handle(store, event)
+        finally:
+            for var, value in previous.items():
+                if value is None:
+                    os.environ.pop(var, None)
+                else:
+                    os.environ[var] = value
         if any(key in response for key in PRINTED_KEYS):
             print(json.dumps(response))
     except Exception:
